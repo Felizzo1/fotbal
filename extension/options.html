@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Spielfinder Updater</title>
+<style>
+  body{font:15px/1.45 system-ui,sans-serif;max-width:560px;margin:32px auto;padding:0 16px;color:#1b2420}
+  h1{font-size:22px;margin:0 0 4px}
+  label{display:block;margin:14px 0 4px;font-weight:600}
+  input{width:100%;padding:7px 9px;font:inherit;border:1px solid #c9d3cd;border-radius:6px;box-sizing:border-box}
+  button{margin-top:16px;padding:8px 14px;font:inherit;border:0;border-radius:6px;background:#1d6b4f;color:#fff;cursor:pointer}
+  button.sec{background:#e7eee9;color:#1b2420}
+  .status{margin-top:20px;padding:10px 12px;background:#f3f5f2;border-radius:6px}
+  .hint{color:#5d6b64;font-size:13px}
+</style>
+</head>
+<body>
+<h1>Fotbal CZ Spielfinder Updater</h1>
+<p class="hint">Holt jeden Morgen um 6 Uhr die Spielpläne von fotbal.cz, sofern Chrome läuft. Verpasste Läufe werden beim nächsten Chrome-Start nachgeholt. Ein Lauf dauert etwa zehn Minuten.</p>
+<label for="repo">GitHub-Repo</label>
+<input id="repo" placeholder="Felizzo1/fotbal">
+<label for="token">GitHub-Token (fine-grained, nur dieses Repo, Contents: Read and write)</label>
+<input id="token" type="password" autocomplete="off">
+<label for="rawKey">Upload-Schlüssel (verschlüsselt die Rohdaten; derselbe Wert gehört ins GitHub-Secret RAW_PASSWORD)</label>
+<input id="rawKey" autocomplete="off" spellcheck="false">
+<button id="gen" class="sec" type="button">Schlüssel erzeugen</button>
+<p class="hint">Nach dem Erzeugen den Schlüssel kopieren und im Repo unter Settings → Secrets and variables → Actions als <b>RAW_PASSWORD</b> anlegen. Er wird nur einmal gebraucht und muss nicht weitergegeben werden.</p>
+<button id="save" type="button">Speichern</button>
+<button id="run" class="sec" type="button">Jetzt aktualisieren</button>
+<div class="status"><strong>Status:</strong> <span id="status">–</span><br><span class="hint" id="when"></span></div>
+<script src="options.js"></script>
+</body>
+</html>

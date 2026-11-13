@@ -1,0 +1,60 @@
+name: Seite bauen und veröffentlichen
+
+on:
+  push:
+    branches: [main]
+    paths: ["raw/**", "site/**", "scripts/**", ".github/workflows/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rohdaten vorhanden?
+        id: check
+        run: |
+          if [ -f raw/fotbal_cz.json.gz.enc ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "Noch keine Rohdaten. Die Erweiterung lädt sie beim ersten Lauf hoch."; echo "ok=false" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/setup-python@v5
+        if: steps.check.outputs.ok == 'true'
+        with:
+          python-version: "3.12"
+      - name: Daten entschlüsseln, aufbereiten, für die Seite verschlüsseln
+        if: steps.check.outputs.ok == 'true'
+        env:
+          RAW_PASSWORD: ${{ secrets.RAW_PASSWORD }}
+          SITE_PASSWORD: ${{ secrets.SITE_PASSWORD }}
+        run: |
+          set -e
+          if [ -z "$RAW_PASSWORD" ] || [ -z "$SITE_PASSWORD" ]; then echo "::error::Secrets RAW_PASSWORD und SITE_PASSWORD fehlen (Settings → Secrets and variables → Actions)"; exit 1; fi
+          pip install --quiet cryptography
+          FCZ_PASSWORD="$RAW_PASSWORD" python3 scripts/fczcrypt.py decrypt raw/fotbal_cz.json.gz.enc /tmp/raw.json.gz
+          python3 scripts/preprocess.py /tmp/raw.json.gz site/okresy.json site/kraje.json /tmp/data.json
+          gzip -9 -c /tmp/data.json > /tmp/data.json.gz
+          FCZ_PASSWORD="$SITE_PASSWORD" python3 scripts/fczcrypt.py encrypt /tmp/data.json.gz site/data.enc
+          rm -f site/data.json
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.check.outputs.ok == 'true'
+        with:
+          path: site
+    outputs:
+      ok: ${{ steps.check.outputs.ok }}
+  deploy:
+    needs: build
+    if: needs.build.outputs.ok == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

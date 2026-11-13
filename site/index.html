@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Fotbal CZ Spielfinder</title>
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="leaflet.css">
+<style>
+:root{
+  /* Layout: Filterleiste links, Karte und Spielliste nebeneinander; am Handy Filter oben, Liste/Karte umschaltbar */
+  --bg:#f3f5f2; --panel:#ffffff; --ink:#1b2420; --muted:#5d6b64; --line:#d9e0db;
+  --accent:#1d6b4f; --accent-ink:#ffffff; --hot:#c8322b; --chip:#e7eee9;
+  --map:#eef2ee; --land:#f9fbf8;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Source Sans 3","Segoe UI",system-ui,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#121715; --panel:#1a211e; --ink:#e6ece8; --muted:#97a69e; --line:#2c3632;
+  --accent:#4fb88d; --accent-ink:#0d1411; --hot:#ff6b5f; --chip:#24302b; --map:#16201c; --land:#1d2622; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#121715; --panel:#1a211e; --ink:#e6ece8; --muted:#97a69e; --line:#2c3632;
+  --accent:#4fb88d; --accent-ink:#0d1411; --hot:#ff6b5f; --chip:#24302b; --map:#16201c; --land:#1d2622; color-scheme:dark;}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.4 var(--body);display:flex;flex-direction:column}
+header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font:700 26px/1 var(--display);letter-spacing:.3px;margin:0;text-wrap:balance}
+header .meta{color:var(--muted);font-size:13px}
+.app{flex:1;display:grid;grid-template-columns:300px 1fr 430px;min-height:0}
+aside{overflow:auto;padding:12px 16px 24px;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;gap:16px}
+fieldset{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+legend{font:700 15px/1 var(--display);text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:8px}
+label.f{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--muted)}
+input,select,button{font:inherit;color:var(--ink)}
+input[type=date],input[type=text],input[type=search],select{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;width:100%}
+.row{display:flex;gap:8px}
+.row>*{flex:1;min-width:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--chip);border-radius:999px;padding:4px 10px;cursor:pointer;font-size:13px;user-select:none}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.chip:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--hot);outline-offset:2px}
+.btn{border:1px solid var(--line);background:var(--chip);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:13px}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.active{outline:2px solid var(--hot)}
+.hint{font-size:12px;color:var(--muted);margin:0}
+#mapwrap{position:relative;min-height:0}
+#map{position:absolute;inset:0;background:var(--map)}
+.leaflet-container{background:var(--map);font-family:var(--body)}
+.okres-label{background:transparent;border:0;box-shadow:none;color:var(--muted);font:600 12px var(--display);letter-spacing:.4px;text-transform:uppercase}
+.okres-label::before{display:none}
+section.list{overflow:auto;border-left:1px solid var(--line);background:var(--panel);min-height:0}
+.summary{position:sticky;top:0;z-index:2;background:var(--panel);padding:10px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.summary strong{font:700 22px/1 var(--display);font-variant-numeric:tabular-nums}
+.day{padding:8px 16px 4px;font:700 17px/1.1 var(--display);text-transform:uppercase;letter-spacing:.5px;background:var(--bg);border-bottom:1px solid var(--line);position:sticky;top:45px;z-index:1}
+.m{display:grid;grid-template-columns:44px 1fr auto;gap:2px 10px;padding:8px 16px;border-bottom:1px solid var(--line);cursor:pointer}
+.m:hover{background:var(--bg)}
+.m .t{font-variant-numeric:tabular-nums;font-weight:700}
+.m .teams{font-weight:600}
+.m .sc{font:700 18px var(--display);font-variant-numeric:tabular-nums;text-align:right}
+.m .sub{grid-column:2/4;color:var(--muted);font-size:13px;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}
+.lvl{display:inline-block;min-width:22px;text-align:center;border-radius:4px;padding:0 5px;font:700 13px/18px var(--display);background:var(--chip)}
+.lvl.l1,.lvl.l2,.lvl.l3,.lvl.l4{background:var(--accent);color:var(--accent-ink)}
+.m a{color:var(--accent)}
+.more{display:block;margin:12px auto 24px}
+.empty{padding:24px 16px;color:var(--muted)}
+.tabs{display:none}
+.popup h3{font:700 16px var(--display);margin:0 0 4px}
+.popup ul{margin:0;padding-left:16px;max-height:220px;overflow:auto}
+.popup li{margin:2px 0}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--panel);color:var(--ink)}
+@media (max-width:1100px){.app{grid-template-columns:280px 1fr 360px}}
+@media (max-width:820px){
+  body{height:auto;min-height:100%}
+  .app{display:flex;flex-direction:column}
+  aside{border-right:0;border-bottom:1px solid var(--line);max-height:none}
+  aside details>summary{cursor:pointer;font:700 18px var(--display);text-transform:uppercase}
+  .tabs{display:flex;gap:8px;padding:8px 16px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  .tabs .btn{flex:1}
+  #mapwrap{height:70vh}
+  .day{top:45px}
+  body[data-view="list"] #mapwrap{display:none}
+  body[data-view="map"] section.list{display:none}
+}
+#gate{position:fixed;inset:0;z-index:1000;background:var(--bg);display:none;align-items:center;justify-content:center;padding:16px}
+#gate form{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:24px;width:100%;max-width:360px;display:flex;flex-direction:column;gap:12px}
+#gate h2{font:700 26px/1 var(--display);margin:0}
+#gate input[type=password]{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%;font:inherit;color:var(--ink)}
+#gate .err{color:var(--hot);font-size:13px;min-height:1em;margin:0}
+#logout{background:none;border:0;color:var(--muted);text-decoration:underline;cursor:pointer;font-size:13px;padding:0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body data-view="list">
+<div id="gate" role="dialog" aria-modal="true" aria-labelledby="gate-title">
+  <form id="gateform" autocomplete="on">
+    <h2 id="gate-title">Fotbal CZ Spielfinder</h2>
+    <p class="hint">Die Spieldaten sind verschlüsselt. Bitte Passwort eingeben.</p>
+    <input type="text" name="username" value="spielfinder" autocomplete="username" hidden>
+    <label class="f" for="pw">Passwort<input type="password" id="pw" autocomplete="current-password" required></label>
+    <label class="f" for="remember"><span><input type="checkbox" id="remember" checked> auf diesem Gerät merken</span></label>
+    <p class="err" id="gateerr" aria-live="polite"></p>
+    <button class="btn primary" type="submit" id="gatebtn">Öffnen</button>
+  </form>
+</div>
+<header>
+  <h1>Fotbal CZ Spielfinder</h1>
+  <span class="meta" id="meta">Lade Spielpläne …</span>
+  <button type="button" id="logout" hidden>Passwort auf diesem Gerät vergessen</button>
+</header>
+<div class="tabs" role="tablist">
+  <button class="btn primary" id="tab-list" type="button">Liste</button>
+  <button class="btn" id="tab-map" type="button">Karte</button>
+</div>
+<div class="app">
+  <aside>
+    <fieldset>
+      <legend>Zeitraum</legend>
+      <div class="chips" id="quick">
+        <button class="chip" type="button" data-q="today" aria-pressed="false">Heute</button>
+        <button class="chip" type="button" data-q="we" aria-pressed="false">Wochenende</button>
+        <button class="chip" type="button" data-q="nwe" aria-pressed="false">Nächstes WE</button>
+        <button class="chip" type="button" data-q="7" aria-pressed="false">7 Tage</button>
+        <button class="chip" type="button" data-q="30" aria-pressed="false">30 Tage</button>
+      </div>
+      <div class="row">
+        <label class="f" for="from">von<input type="date" id="from"></label>
+        <label class="f" for="to">bis<input type="date" id="to"></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Ort und Umkreis</legend>
+      <label class="f" for="place">Ort mit Sportplatz
+        <input type="search" id="place" list="placelist" placeholder="z. B. Kamberk, Cheb, Aš">
+      </label>
+      <datalist id="placelist"></datalist>
+      <label class="f" for="radius">Umkreis: <span id="radiusval">25 km</span>
+        <input type="range" id="radius" min="5" max="150" step="5" value="25">
+      </label>
+      <div class="row">
+        <button class="btn" type="button" id="pick">Punkt auf Karte wählen</button>
+        <button class="btn" type="button" id="clearcenter">Umkreis aus</button>
+      </div>
+      <p class="hint" id="centerinfo">Kein Mittelpunkt gesetzt.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Region</legend>
+      <label class="f" for="kraj">Kraj<select id="kraj"><option value="-1">Ganz Tschechien</option></select></label>
+      <label class="f" for="okres">Okres<select id="okres"><option value="-1">Alle Okresy</option></select></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Kategorie</legend>
+      <div class="chips" id="cats"></div>
+      <div class="chips"><button class="chip" type="button" id="cups" aria-pressed="true">Pokalspiele</button></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Ligaebene Männer</legend>
+      <div class="chips" id="levels"></div>
+      <div class="row"><button class="btn" type="button" id="lvlall">Alle</button><button class="btn" type="button" id="lvllow">Nur 6. bis 10.</button></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Suche</legend>
+      <label class="f" for="q">Mannschaft oder Wettbewerb<input type="search" id="q" placeholder="z. B. Sokol, Divize"></label>
+      <label class="f" for="results"><span><input type="checkbox" id="results"> auch gespielte Partien zeigen</span></label>
+    </fieldset>
+    <p class="hint">Daten: fotbal.cz (FAČR). Spielort laut Spielbericht, Position nach Vereinssitz. Kurzfristige Verlegungen stehen nur auf fotbal.cz.</p>
+  </aside>
+
+  <div id="mapwrap"><div id="map" aria-label="Karte der Spielorte"></div></div>
+
+  <section class="list" aria-live="polite">
+    <div class="summary"><span><strong id="count">0</strong> Spiele</span><span class="hint" id="sumhint"></span></div>
+    <div id="list"></div>
+  </section>
+</div>
+
+<script src="leaflet.js"></script>
+<script>
+(async function(){
+const $=s=>document.querySelector(s);
+const DAY=['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
+const pad=n=>String(n).padStart(2,'0');
+const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// ---------- Daten laden (verschlüsselt auf GitHub Pages, unverschlüsselt im Claude-Artefakt) ----------
+async function decryptBlob(buf,pw){
+  const b=new Uint8Array(buf);
+  if(String.fromCharCode(...b.slice(0,4))!=='FCZ1') throw new Error('Format');
+  const salt=b.slice(4,20), iv=b.slice(20,32), ct=b.slice(32);
+  const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
+  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:310000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['decrypt']);
+  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,ct);
+  return JSON.parse(await new Response(new Blob([plain]).stream().pipeThrough(new DecompressionStream('gzip'))).text());
+}
+const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
+const lsSet=(k,v)=>{try{v===null?localStorage.removeItem(k):localStorage.setItem(k,v);}catch(e){}};
+async function loadData(){
+  const plain=await fetch('data.json').catch(()=>null);
+  if(plain&&plain.ok) return plain.json();
+  const enc=await fetch('data.enc'); if(!enc.ok) throw new Error('data.enc');
+  const buf=await enc.arrayBuffer();
+  const saved=lsGet('fcz-pw');
+  if(saved){ try{ const d=await decryptBlob(buf,saved); $('#logout').hidden=false; return d; }catch(e){ lsSet('fcz-pw',null); } }
+  $('#gate').style.display='flex'; $('#pw').focus();
+  return new Promise(resolve=>{
+    $('#gateform').onsubmit=async ev=>{
+      ev.preventDefault(); $('#gateerr').textContent=''; $('#gatebtn').disabled=true; $('#gatebtn').textContent='Entschlüssle …';
+      try{ const d=await decryptBlob(buf,$('#pw').value); if($('#remember').checked){ lsSet('fcz-pw',$('#pw').value); $('#logout').hidden=false; } $('#gate').style.display='none'; resolve(d); }
+      catch(e){ $('#gateerr').textContent='Das Passwort stimmt nicht.'; $('#pw').select(); }
+      $('#gatebtn').disabled=false; $('#gatebtn').textContent='Öffnen';
+    };
+  });
+}
+$('#logout').onclick=()=>{ lsSet('fcz-pw',null); location.reload(); };
+let D, okresGeo, krajGeo;
+try{
+  [okresGeo,krajGeo]=await Promise.all(['okresy.json','kraje.json'].map(u=>fetch(u).then(r=>{if(!r.ok)throw new Error(u);return r.json();})));
+  D=await loadData();
+}catch(e){ $('#meta').textContent='Die Spieldaten konnten nicht geladen werden. Bitte Seite neu laden.'; return; }
+
+const gen=new Date(D.generated);
+$('#meta').textContent='Saison '+D.season+' · '+D.matches.length.toLocaleString('de-DE')+' Spiele · Stand '+gen.toLocaleDateString('de-DE')+' '+gen.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+
+// ---------- Zustand ----------
+const S={from:'',to:'',cats:new Set([0,1]),cups:true,levels:new Set([1,2,3,4,5,6,7,8,9,10,0]),kraj:-1,okres:-1,center:null,radius:25,q:'',results:false,limit:200};
+try{ const s=JSON.parse(localStorage.getItem('fcz-filter')||'null'); if(s){ S.cats=new Set(s.cats); S.cups=s.cups; S.levels=new Set(s.levels); S.radius=s.radius||25; S.kraj=s.kraj??-1; S.okres=s.okres??-1; S.center=s.center||null; S.results=!!s.results; } }catch(e){}
+const save=()=>{ try{ localStorage.setItem('fcz-filter',JSON.stringify({cats:[...S.cats],cups:S.cups,levels:[...S.levels],radius:S.radius,kraj:S.kraj,okres:S.okres,center:S.center,results:S.results})); }catch(e){} };
+
+// ---------- Zeitraum ----------
+function setQuick(q){
+  const now=new Date(); const t=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  let a=new Date(t), b=new Date(t);
+  if(q==='we'||q==='nwe'){ const dow=t.getDay(); let toSat=(6-dow+7)%7; if(dow===0) toSat=-1; a.setDate(t.getDate()+toSat); if(q==='nwe') a.setDate(a.getDate()+7); if(dow===0&&q==='we'){a=new Date(t);a.setDate(t.getDate()-1);} b=new Date(a); b.setDate(a.getDate()+1); if(a<t&&q==='we') a=new Date(t); }
+  else if(q==='7'){ b.setDate(t.getDate()+6); }
+  else if(q==='30'){ b.setDate(t.getDate()+29); }
+  S.from=iso(a); S.to=iso(b); $('#from').value=S.from; $('#to').value=S.to;
+  document.querySelectorAll('#quick .chip').forEach(c=>c.setAttribute('aria-pressed',c.dataset.q===q));
+}
+document.querySelectorAll('#quick .chip').forEach(c=>c.onclick=()=>{setQuick(c.dataset.q);render();});
+$('#from').onchange=e=>{S.from=e.target.value; document.querySelectorAll('#quick .chip').forEach(c=>c.setAttribute('aria-pressed','false')); render();};
+$('#to').onchange=e=>{S.to=e.target.value; document.querySelectorAll('#quick .chip').forEach(c=>c.setAttribute('aria-pressed','false')); render();};
+
+// ---------- Kategorien und Ebenen ----------
+D.cats.forEach((c,i)=>{ const b=document.createElement('button'); b.type='button'; b.className='chip'; b.textContent=c; b.setAttribute('aria-pressed',S.cats.has(i)); b.onclick=()=>{ S.cats.has(i)?S.cats.delete(i):S.cats.add(i); b.setAttribute('aria-pressed',S.cats.has(i)); render(); }; $('#cats').appendChild(b); });
+$('#cups').setAttribute('aria-pressed',S.cups); $('#cups').onclick=()=>{S.cups=!S.cups; $('#cups').setAttribute('aria-pressed',S.cups); render();};
+const LV=[1,2,3,4,5,6,7,8,9,10,0];
+LV.forEach(l=>{ const b=document.createElement('button'); b.type='button'; b.className='chip'; b.dataset.l=l; b.textContent=l?l+'.':'ohne'; b.title=l?l+'. Liga':'Liga ohne erkennbare Ebene'; b.setAttribute('aria-pressed',S.levels.has(l)); b.onclick=()=>{ S.levels.has(l)?S.levels.delete(l):S.levels.add(l); b.setAttribute('aria-pressed',S.levels.has(l)); render(); }; $('#levels').appendChild(b); });
+const syncLv=()=>document.querySelectorAll('#levels .chip').forEach(b=>b.setAttribute('aria-pressed',S.levels.has(+b.dataset.l)));
+$('#lvlall').onclick=()=>{S.levels=new Set(LV); syncLv(); render();};
+$('#lvllow').onclick=()=>{S.levels=new Set([6,7,8,9,10]); syncLv(); render();};
+
+// ---------- Region ----------
+D.kraje.forEach((k,i)=>$('#kraj').add(new Option(k,i)));
+function fillOkres(){ const sel=$('#okres'); sel.length=1; D.okresy.forEach(([o,k],i)=>{ if(S.kraj<0||k===S.kraj) sel.add(new Option(o,i)); }); sel.value=S.okres; if(sel.value!==String(S.okres)){S.okres=-1; sel.value='-1';} }
+$('#kraj').value=S.kraj; fillOkres();
+$('#kraj').onchange=e=>{S.kraj=+e.target.value; S.okres=-1; fillOkres(); render(true);};
+$('#okres').onchange=e=>{S.okres=+e.target.value; render(true);};
+
+// ---------- Orte ----------
+const P=D.places;
+const placeNames=new Map();
+P.forEach((p,i)=>{ const label=p[0]+(p[3]>=0?' ('+D.okresy[p[3]][0]+')':''); if(!placeNames.has(label)) placeNames.set(label,i); });
+const dl=$('#placelist'); [...placeNames.keys()].sort((a,b)=>a.localeCompare(b,'cs')).forEach(n=>{const o=document.createElement('option'); o.value=n; dl.appendChild(o);});
+function setCenter(lat,lon,label){ S.center={lat,lon,label}; render(true); }
+$('#place').onchange=e=>{ const v=e.target.value.trim(); let i=placeNames.get(v); if(i===undefined){ const lv=v.toLowerCase(); for(const [n,k] of placeNames){ if(n.toLowerCase().startsWith(lv)){i=k;break;} } } if(i!==undefined){ setCenter(P[i][1],P[i][2],P[i][0]); } };
+$('#radius').value=S.radius; $('#radiusval').textContent=S.radius+' km';
+$('#radius').oninput=e=>{S.radius=+e.target.value; $('#radiusval').textContent=S.radius+' km'; render();};
+$('#clearcenter').onclick=()=>{S.center=null; $('#place').value=''; render();};
+let picking=false; $('#pick').onclick=()=>{picking=!picking; $('#pick').classList.toggle('active',picking); $('#pick').textContent=picking?'Jetzt in die Karte tippen':'Punkt auf Karte wählen'; if(picking&&matchMedia('(max-width:820px)').matches) setView('map');};
+
+$('#q').oninput=e=>{S.q=e.target.value.trim().toLowerCase(); render();};
+$('#results').checked=S.results; $('#results').onchange=e=>{S.results=e.target.checked; render();};
+
+// ---------- Karte ----------
+const map=L.map('map',{preferCanvas:true,zoomSnap:.5,attributionControl:true}).setView([49.8,15.5],7);
+map.attributionControl.setPrefix(false); map.attributionControl.addAttribution('Grenzen: ČÚZK (CC BY 4.0) · Spiele: fotbal.cz');
+const css=getComputedStyle(document.documentElement);
+const tok=n=>css.getPropertyValue(n).trim();
+// Auf GitHub Pages dürfen Kartenkacheln geladen werden, im Claude-Artefakt nicht
+const tiles=!/claude|anthropic/.test(location.hostname);
+if(tiles){ L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap-Mitwirkende'}).addTo(map); }
+L.geoJSON(okresGeo,{style:{color:tiles?tok('--muted'):tok('--line'),weight:1,fillColor:tok('--land'),fillOpacity:tiles?0:1},interactive:false}).addTo(map);
+L.geoJSON(krajGeo,{style:{color:tok('--muted'),weight:1.6,fill:false},interactive:false}).addTo(map);
+const labels=L.layerGroup();
+okresGeo.features.forEach((f,k)=>{ const idx=D.okresPoly[k]; if(idx===undefined) return; const c=L.geoJSON(f).getBounds().getCenter(); L.tooltip({permanent:true,direction:'center',className:'okres-label'}).setLatLng(c).setContent(esc(D.okresy[idx][0])).addTo(labels); });
+const updLabels=()=>{ map.getZoom()>=8.5?labels.addTo(map):labels.remove(); }; map.on('zoomend',updLabels); updLabels();
+const markers=L.layerGroup().addTo(map);
+const legend=L.control({position:'bottomleft'}); legend.onAdd=()=>{ const d=L.DomUtil.create('div'); d.style.cssText='background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12px;line-height:1.5'; d.innerHTML='<div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--hot);margin-right:6px"></span>mit Spiel der 1. bis 5. Liga</div><div><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--accent);margin-right:6px"></span>übrige Spiele</div><div style="color:var(--muted)">Punktgröße = Anzahl Spiele</div>'; return d; }; legend.addTo(map);
+let circle=null;
+map.on('click',e=>{ if(!picking) return; picking=false; $('#pick').classList.remove('active'); $('#pick').textContent='Punkt auf Karte wählen'; setCenter(e.latlng.lat,e.latlng.lng,'Kartenpunkt'); });
+
+function dist(a,b,c,d){ const R=6371,r=Math.PI/180; const x=Math.sin((c-a)*r/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin((d-b)*r/2)**2; return 2*R*Math.asin(Math.sqrt(x)); }
+
+// ---------- Filtern und Darstellen ----------
+const C=D.comps;
+function filtered(){
+  const out=[]; const today=iso(new Date()); const from=S.from||'0000', to=(S.to||'9999')+'T99';
+  const nowIso=new Date(Date.now()-2*3600e3); const nowStr=iso(nowIso)+'T'+pad(nowIso.getHours())+':'+pad(nowIso.getMinutes());
+  for(const m of D.matches){
+    const dt=m[1]; if(dt<from||dt>to) continue;
+    const c=C[m[0]]; if(!S.cats.has(c[1])) continue;
+    if(c[3]&&!S.cups) continue;
+    if(c[1]===0&&!c[3]&&!S.levels.has(c[2]||0)) continue;
+    if(!S.results&&m[4]&&/\d/.test(m[4])&&dt<nowStr) continue;
+    const p=m[5]>=0?P[m[5]]:null;
+    if(S.okres>=0&&(!p||p[3]!==S.okres)) continue;
+    if(S.kraj>=0&&S.okres<0&&(!p||p[4]!==S.kraj)) continue;
+    let km=null;
+    if(S.center){ if(!p) continue; km=dist(S.center.lat,S.center.lon,p[1],p[2]); if(km>S.radius) continue; }
+    if(S.q){ const s=(D.teams[m[2]]+' '+D.teams[m[3]]+' '+c[0]).toLowerCase(); if(!s.includes(S.q)) continue; }
+    out.push([m,km]);
+  }
+  return out;
+}
+function dayLabel(d){ const x=new Date(d+'T12:00'); return DAY[x.getDay()]+', '+x.toLocaleDateString('de-DE',{day:'numeric',month:'long'}); }
+function compUrl(c){ return 'https://www.fotbal.cz/souteze/turnaje/zapas/'+c[4]; }
+function mapyUrl(p){ return 'https://mapy.cz/fnc/v1/showmap?mapset=outdoor&center='+p[2]+','+p[1]+'&zoom=15&marker=true'; }
+function lvlBadge(c){ return c[2]?'<span class="lvl l'+c[2]+'" title="'+c[2]+'. Liga">'+c[2]+'</span>':''; }
+
+function render(fit){
+  save();
+  const R=filtered();
+  $('#count').textContent=R.length.toLocaleString('de-DE');
+  $('#sumhint').textContent=S.center?('um '+S.center.label+', '+S.radius+' km'):(S.okres>=0?'Okres '+D.okresy[S.okres][0]:(S.kraj>=0?D.kraje[S.kraj]:'ganz Tschechien'));
+  $('#centerinfo').textContent=S.center?('Mittelpunkt: '+S.center.label):'Kein Mittelpunkt gesetzt.';
+  // Liste
+  const L1=$('#list'); let h=''; let last='';
+  if(!R.length) h='<p class="empty">Keine Spiele für diese Auswahl. Zeitraum verlängern, Umkreis vergrößern oder weitere Kategorien einschalten.</p>';
+  R.slice(0,S.limit).forEach(([m,km])=>{
+    const d=m[1].slice(0,10); if(d!==last){ h+='<div class="day">'+dayLabel(d)+'</div>'; last=d; }
+    const c=C[m[0]], p=m[5]>=0?P[m[5]]:null;
+    h+='<div class="m" data-p="'+m[5]+'"><span class="t">'+(m[1].slice(11,16)||'–')+'</span><span class="teams">'+esc(D.teams[m[2]])+' – '+esc(D.teams[m[3]])+'</span><span class="sc">'+esc(m[4]||'')+'</span>'+
+       '<span class="sub">'+lvlBadge(c)+'<span>'+esc(c[0])+'</span>'+(p?'<span>'+esc(p[0])+(km!==null?' · '+km.toFixed(0)+' km':'')+'</span><a href="'+mapyUrl(p)+'" target="_blank" rel="noopener">Mapy.cz</a>':'')+'<a href="'+compUrl(c)+'" target="_blank" rel="noopener">fotbal.cz</a></span></div>';
+  });
+  if(R.length>S.limit) h+='<button class="btn more" type="button" id="moreb">Weitere '+Math.min(200,R.length-S.limit)+' von '+(R.length-S.limit).toLocaleString('de-DE')+' anzeigen</button>';
+  L1.innerHTML=h;
+  const mb=$('#moreb'); if(mb) mb.onclick=()=>{S.limit+=200; render();};
+  L1.querySelectorAll('.m').forEach(el=>el.onclick=ev=>{ if(ev.target.tagName==='A') return; const pi=+el.dataset.p; if(pi<0) return; if(matchMedia('(max-width:820px)').matches) setView('map'); map.setView([P[pi][1],P[pi][2]],Math.max(map.getZoom(),11)); openPlace(pi); });
+  // Karte
+  markers.clearLayers(); byPlace=new Map();
+  for(const [m] of R){ if(m[5]<0) continue; if(!byPlace.has(m[5])) byPlace.set(m[5],[]); byPlace.get(m[5]).push(m); }
+  const acc=tok('--accent'), hot=tok('--hot');
+  const pts=[];
+  for(const [pi,ms] of byPlace){
+    const p=P[pi]; const top=Math.min(...ms.map(m=>{const c=C[m[0]]; return c[1]===0&&c[2]?c[2]:99;}));
+    const mk=L.circleMarker([p[1],p[2]],{radius:Math.min(4+Math.sqrt(ms.length)*2,14),color:'#fff',weight:1,fillColor:top<=5?hot:acc,fillOpacity:.9});
+    mk.on('click',()=>openPlace(pi)); mk.addTo(markers); pts.push([p[1],p[2]]);
+    markerOf.set(pi,mk);
+  }
+  if(circle){circle.remove(); circle=null;}
+  if(S.center){ circle=L.circle([S.center.lat,S.center.lon],{radius:S.radius*1000,color:hot,weight:1.5,fill:false,dashArray:'4 4',interactive:false}).addTo(map); }
+  if(fit){ if(S.center) map.fitBounds(circle.getBounds(),{padding:[10,10]}); else if(pts.length) map.fitBounds(pts,{padding:[20,20],maxZoom:11}); }
+}
+let byPlace=new Map(); const markerOf=new Map();
+function openPlace(pi){
+  const p=P[pi], ms=byPlace.get(pi)||[];
+  const html='<div class="popup"><h3>'+esc(p[0])+'</h3><div class="hint">'+(p[3]>=0?'Okres '+esc(D.okresy[p[3]][0])+' · ':'')+'<a href="'+mapyUrl(p)+'" target="_blank" rel="noopener">Auf Mapy.cz öffnen</a></div><ul>'+
+    ms.slice(0,30).map(m=>{const c=C[m[0]]; return '<li><b>'+new Date(m[1].slice(0,10)+'T12:00').toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'numeric'})+' '+(m[1].slice(11,16))+'</b> '+esc(D.teams[m[2]])+' – '+esc(D.teams[m[3]])+(m[4]?' <b>'+esc(m[4])+'</b>':'')+'<br><span class="hint">'+(c[2]?c[2]+'. Liga · ':'')+esc(c[0])+'</span></li>';}).join('')+(ms.length>30?'<li>… und '+(ms.length-30)+' weitere</li>':'')+'</ul></div>';
+  L.popup({maxWidth:320}).setLatLng([p[1],p[2]]).setContent(html).openOn(map);
+}
+
+// ---------- Ansicht am Handy ----------
+function setView(v){ document.body.dataset.view=v; $('#tab-list').classList.toggle('primary',v==='list'); $('#tab-map').classList.toggle('primary',v==='map'); if(v==='map') setTimeout(()=>map.invalidateSize(),50); }
+$('#tab-list').onclick=()=>setView('list'); $('#tab-map').onclick=()=>setView('map');
+
+setQuick('we');
+// Falls am Wochenende nichts läuft (Winterpause), auf 30 Tage ausweichen
+if(!filtered().length) setQuick('30');
+render(true);
+})();
+</script>
+</body>
+</html>

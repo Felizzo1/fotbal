@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Fotbal CZ Spielfinder Updater",
+  "version": "1.0.0",
+  "description": "Holt einmal täglich die Spielpläne von fotbal.cz und lädt sie in das GitHub-Repo des Spielfinders.",
+  "permissions": ["alarms", "scripting", "storage", "tabs"],
+  "host_permissions": ["https://www.fotbal.cz/*", "https://api.github.com/*"],
+  "background": { "service_worker": "background.js" },
+  "options_page": "options.html",
+  "action": { "default_title": "Spielfinder: Daten jetzt aktualisieren" }
+}
