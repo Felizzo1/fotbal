@@ -33,6 +33,8 @@ Die Seite ist passwortgeschützt: Im Repo und auf GitHub Pages liegen die Spield
 
 Danach läuft der Abruf jeden Montag um 6 Uhr, sofern Chrome offen ist, sonst beim nächsten Chrome-Start. Ein Klick aufs Symbol startet ihn sofort. Wochentag und Uhrzeit stehen oben in `extension/background.js` (`WEEKDAY`, `HOUR`).
 
+Damit weniger Seiten abgerufen werden, merkt sich die Erweiterung den letzten Stand: Vereinskarte und Wettbewerbsliste werden nur alle vier Wochen neu geladen, Wettbewerbe, deren Spiele beim letzten Laden alle vorbei waren, gar nicht mehr. Alle übrigen Wettbewerbe werden jede Woche neu geladen, damit Datum, Uhrzeit und Ort stimmen. Ein abgebrochener Lauf macht beim nächsten Mal dort weiter. „Speicher leeren“ in den Optionen erzwingt einen kompletten Neuabruf.
+
 Die Abfrage ist absichtlich langsam (eine Seite nach der anderen, 1,5–3 Sekunden Pause) und dauert ein bis zwei Stunden, damit fotbal.cz keine Captcha-Prüfung auslöst. Kommt trotzdem eine, öffnet die Erweiterung den Tab im Vordergrund und zeigt eine Benachrichtigung. Nach dem Lösen läuft der Abruf von selbst weiter, gewartet wird bis zu drei Stunden. Auf dem Raspberry Pi geht das z. B. per VNC.
 
 Passwort ändern: Secret `SITE_PASSWORD` ersetzen, dann unter Actions den Workflow „Seite bauen und veröffentlichen“ mit „Run workflow“ neu starten. Das alte Passwort funktioniert danach nicht mehr.

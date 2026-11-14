@@ -24,5 +24,9 @@ $('run').onclick = async () => {
   chrome.runtime.sendMessage({ type: 'fcz-run' });
   $('status').textContent = 'Läuft …';
 };
+$('clear').onclick = async () => {
+  await chrome.storage.local.remove('cache');
+  $('status').textContent = 'Speicher geleert. Der nächste Lauf lädt alles neu.';
+};
 chrome.storage.onChanged.addListener(load);
 load();
