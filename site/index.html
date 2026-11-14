@@ -254,12 +254,15 @@ function setQuick(q){
   if(q==='we'||q==='nwe'){ const dow=t.getDay(); let toSat=(6-dow+7)%7; if(dow===0) toSat=-1; a.setDate(t.getDate()+toSat); if(q==='nwe') a.setDate(a.getDate()+7); if(dow===0&&q==='we'){a=new Date(t);a.setDate(t.getDate()-1);} b=new Date(a); b.setDate(a.getDate()+1); if(a<t&&q==='we') a=new Date(t); }
   else if(q==='7'){ b.setDate(t.getDate()+6); }
   else if(q==='30'){ b.setDate(t.getDate()+29); }
-  S.from=iso(a); S.to=iso(b); $('#from').value=S.from; $('#to').value=S.to;
+  S.from=iso(a); S.to=iso(b); syncDates();
   document.querySelectorAll('#quick .chip').forEach(c=>c.setAttribute('aria-pressed',c.dataset.q===q));
 }
+// „bis“ darf nie vor „von“ liegen: Kalender begrenzen und beim Eintippen das andere Datum nachziehen
+function syncDates(){ $('#from').value=S.from; $('#to').value=S.to; $('#to').min=S.from||''; $('#from').max=S.to||''; }
+const manualDate=()=>{ document.querySelectorAll('#quick .chip').forEach(c=>c.setAttribute('aria-pressed','false')); syncDates(); render(); };
 document.querySelectorAll('#quick .chip').forEach(c=>c.onclick=()=>{setQuick(c.dataset.q);render();});
-$('#from').onchange=e=>{S.from=e.target.value; document.querySelectorAll('#quick .chip').forEach(c=>c.setAttribute('aria-pressed','false')); render();};
-$('#to').onchange=e=>{S.to=e.target.value; document.querySelectorAll('#quick .chip').forEach(c=>c.setAttribute('aria-pressed','false')); render();};
+$('#from').onchange=e=>{S.from=e.target.value; if(S.from&&S.to&&S.from>S.to) S.to=S.from; manualDate();};
+$('#to').onchange=e=>{S.to=e.target.value; if(S.from&&S.to&&S.to<S.from) S.from=S.to; manualDate();};
 
 // ---------- Kategorien und Ebenen ----------
 D.cats.forEach((c,i)=>{ const b=document.createElement('button'); b.type='button'; b.className='chip'; b.textContent=c; b.setAttribute('aria-pressed',S.cats.has(i)); b.onclick=()=>{ S.cats.has(i)?S.cats.delete(i):S.cats.add(i); b.setAttribute('aria-pressed',S.cats.has(i)); render(); }; $('#cats').appendChild(b); });
