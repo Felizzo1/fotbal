@@ -265,7 +265,8 @@ $('#to').onchange=e=>{S.to=e.target.value; document.querySelectorAll('#quick .ch
 D.cats.forEach((c,i)=>{ const b=document.createElement('button'); b.type='button'; b.className='chip'; b.textContent=c; b.setAttribute('aria-pressed',S.cats.has(i)); b.onclick=()=>{ S.cats.has(i)?S.cats.delete(i):S.cats.add(i); b.setAttribute('aria-pressed',S.cats.has(i)); render(); }; $('#cats').appendChild(b); });
 $('#cups').setAttribute('aria-pressed',S.cups); $('#cups').onclick=()=>{S.cups=!S.cups; $('#cups').setAttribute('aria-pressed',S.cups); render();};
 const LV=[1,2,3,4,5,6,7,8,9,10,0];
-LV.forEach(l=>{ const b=document.createElement('button'); b.type='button'; b.className='chip'; b.dataset.l=l; b.textContent=l?l+'.':'ohne'; b.title=l?l+'. Liga':'Liga ohne erkennbare Ebene'; b.setAttribute('aria-pressed',S.levels.has(l)); b.onclick=()=>{ S.levels.has(l)?S.levels.delete(l):S.levels.add(l); b.setAttribute('aria-pressed',S.levels.has(l)); render(); }; $('#levels').appendChild(b); });
+// 0 = Ebene nicht erkannt: bleibt im Filter (bei „Alle“ sichtbar), bekommt aber keinen eigenen Knopf
+LV.filter(l=>l).forEach(l=>{ const b=document.createElement('button'); b.type='button'; b.className='chip'; b.dataset.l=l; b.textContent=l+'.'; b.title=l+'. Liga'; b.setAttribute('aria-pressed',S.levels.has(l)); b.onclick=()=>{ S.levels.has(l)?S.levels.delete(l):S.levels.add(l); b.setAttribute('aria-pressed',S.levels.has(l)); render(); }; $('#levels').appendChild(b); });
 const syncLv=()=>document.querySelectorAll('#levels .chip').forEach(b=>b.setAttribute('aria-pressed',S.levels.has(+b.dataset.l)));
 $('#lvlall').onclick=()=>{S.levels=new Set(LV); syncLv(); render();};
 $('#lvllow').onclick=()=>{S.levels=new Set([6,7,8,9,10]); syncLv(); render();};
@@ -279,6 +280,8 @@ $('#okres').onchange=e=>{S.okres=+e.target.value; render(true);};
 
 // ---------- Orte ----------
 const P=D.places;
+// Kürzel „UMT“/„UT“ (umělá tráva) als Kunstrasen ausschreiben
+P.forEach(p=>{ p[0]=p[0].replace(/(^|[\s\/,(-])(?:UMT|UT|ÚT)\b\.?/g,'$1Kunstrasen'); });
 const placeNames=new Map();
 P.forEach((p,i)=>{ const label=p[0]+(p[3]>=0?' ('+D.okresy[p[3]][0]+')':''); if(!placeNames.has(label)) placeNames.set(label,i); });
 const dl=$('#placelist'); [...placeNames.keys()].sort((a,b)=>a.localeCompare(b,'cs')).forEach(n=>{const o=document.createElement('option'); o.value=n; dl.appendChild(o);});
