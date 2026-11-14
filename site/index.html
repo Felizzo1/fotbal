@@ -350,7 +350,6 @@ function epTerm(team){ const w=team.replace(/["„“]/g,'').replace(/,.*$/,'').
 function epUrl(team){ return 'https://www.europlan-online.de/index.php?s=search&search='+encodeURIComponent(epTerm(team)); }
 // Direktlink zum Stadion, wenn die Aufbereitung eins zuordnen konnte (p[5]), sonst die Suche
 function epLink(p,team){ return p&&p[5]?'<a href="https://www.europlan-online.de/'+esc(p[5])+'" target="_blank" rel="noopener">Europlan</a>':'<a href="'+epUrl(team)+'" target="_blank" rel="noopener" title="Kein Stadion zugeordnet, öffnet die Suche">Europlan-Suche</a>'; }
-function mapyUrl(p){ return 'https://mapy.cz/fnc/v1/showmap?mapset=outdoor&center='+p[2]+','+p[1]+'&zoom=15&marker=true'; }
 function lvlBadge(c){ return c[2]?'<span class="lvl l'+c[2]+'" title="'+c[2]+'. Liga">'+c[2]+'</span>':''; }
 
 function render(fit){
@@ -402,7 +401,7 @@ function render(fit){
 let byPlace=new Map(); const markerOf=new Map();
 function openPlace(pi){
   const p=P[pi], ms=byPlace.get(pi)||[];
-  const html='<div class="popup"><h3>'+esc(p[0])+'</h3><div class="hint">'+(p[3]>=0?'Bezirk '+esc(D.okresy[p[3]][0])+' · ':'')+(ms.length?epLink(p,D.teams[ms[0][2]])+' · ':'')+'<a href="'+mapyUrl(p)+'" target="_blank" rel="noopener">Route (Mapy.cz)</a></div><ul>'+
+  const html='<div class="popup"><h3>'+esc(p[0])+'</h3><div class="hint">'+[p[3]>=0?'Bezirk '+esc(D.okresy[p[3]][0]):'', ms.length?epLink(p,D.teams[ms[0][2]]):''].filter(Boolean).join(' · ')+'</div><ul>'+
     ms.slice(0,30).map(m=>{const c=C[m[0]]; return '<li><b>'+new Date(m[1].slice(0,10)+'T12:00').toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'numeric'})+' '+(m[1].slice(11,16))+'</b> '+esc(D.teams[m[2]])+' – '+esc(D.teams[m[3]])+(m[4]?' <b>'+esc(m[4])+'</b>':'')+'<br><span class="hint">'+(c[2]?c[2]+'. Liga · ':'')+esc(c[0])+'</span></li>';}).join('')+(ms.length>30?'<li>… und '+(ms.length-30)+' weitere</li>':'')+'</ul></div>';
   L.popup({maxWidth:320}).setLatLng([p[1],p[2]]).setContent(html).openOn(map);
 }
