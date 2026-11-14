@@ -15,7 +15,7 @@
 </style>
 </head>
 <body>
-<h1>Fotbal CZ Spielfinder Updater</h1>
+<h1>Fotbal CZ Spielfinder Updater <span class="hint" id="ver"></span></h1>
 <p class="hint">Holt jeden Montag um 6 Uhr die Spielpläne von fotbal.cz, sofern Chrome läuft. Ein verpasster Lauf wird beim nächsten Chrome-Start nachgeholt. Vereine und Wettbewerbsliste werden nur alle vier Wochen neu geladen, abgeschlossene Wettbewerbe gar nicht mehr. Die Abfrage ist absichtlich langsam und dauert ein bis zwei Stunden. Verlangt fotbal.cz eine Captcha-Prüfung, öffnet sich ein Tab mit Hinweis: Prüfung lösen, danach läuft der Abruf von selbst weiter.</p>
 <label for="repo">GitHub-Repo</label>
 <input id="repo" placeholder="Felizzo1/fotbal">
@@ -28,6 +28,7 @@
 <button id="save" type="button">Speichern</button>
 <button id="run" class="sec" type="button">Jetzt aktualisieren</button>
 <button id="clear" class="sec" type="button">Speicher leeren (nächster Lauf lädt alles neu)</button>
+<button id="diag" class="sec" type="button">Diagnose speichern</button>
 <div class="status"><strong>Status:</strong> <span id="status">–</span><br><span class="hint" id="when"></span></div>
 <script src="options.js"></script>
 </body>

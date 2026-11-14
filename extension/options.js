@@ -28,5 +28,17 @@ $('clear').onclick = async () => {
   await chrome.storage.local.remove('cache');
   $('status').textContent = 'Speicher geleert. Der nächste Lauf lädt alles neu.';
 };
+$('diag').onclick = async () => {
+  const s = await chrome.storage.local.get(['diag', 'diagSummary', 'diagFail', 'status']);
+  const info = { version: chrome.runtime.getManifest().version, status: s.status, summary: s.diagSummary, lastFail: s.diagFail,
+    sample: s.diag ? { ...s.diag, html: undefined } : null };
+  // Kopf mit Infos, danach die gespeicherte Beispielseite (ohne Token oder Schlüssel)
+  const text = '<!-- Spielfinder-Diagnose\n' + JSON.stringify(info, null, 2).replace(/--/g, '- -') + '\n-->\n' + (s.diag ? s.diag.html : '<p>Keine Beispielseite gespeichert.</p>');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/html' }));
+  a.download = 'spielfinder-diagnose.html'; a.click();
+  $('status').textContent = 'Diagnose gespeichert (spielfinder-diagnose.html im Download-Ordner).';
+};
 chrome.storage.onChanged.addListener(load);
+$('ver').textContent = 'Version ' + chrome.runtime.getManifest().version;
 load();
