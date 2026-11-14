@@ -1,17 +1,50 @@
 // Läuft im fotbal.cz-Tab (eingefügt per chrome.scripting.executeScript).
 // Muss in sich geschlossen sein: keine Verweise auf Variablen außerhalb der Funktion.
 function crawlFotbalCz(cfg) {
-  const CONCURRENCY = 3;
+  // Bewusst langsam: eine Anfrage nach der anderen mit 1,5–3 Sekunden Pause.
+  // Viele schnelle Anfragen lösen bei fotbal.cz die reCAPTCHA-Prüfung aus.
+  const CONCURRENCY = 1;
+  const DELAY_MIN = 1500, DELAY_MAX = 3000;
+  const CAPTCHA_WAIT = 3 * 3600e3; // so lange wird auf das Lösen einer Prüfung gewartet
+  // Zwischenspeicher: Vereine und Wettbewerbsliste ändern sich selten, abgeschlossene Wettbewerbe gar nicht mehr.
+  const CLUBS_MAX_AGE = 28 * 86400e3;  // Vereinskarte höchstens alle 4 Wochen neu laden
+  const INDEX_MAX_AGE = 28 * 86400e3;  // Verbände und Wettbewerbsliste höchstens alle 4 Wochen
+  const FINISHED_MARGIN = 3 * 86400e3; // Wettbewerb gilt als fertig, wenn beim letzten Laden alle Spiele 3 Tage vorbei waren
   const progress = text => { try { chrome.runtime.sendMessage({ type: 'fcz-progress', text }); } catch (e) {} };
   const done = (ok, text) => { try { chrome.runtime.sendMessage({ type: 'fcz-done', ok, text }); } catch (e) {} };
 
   (async () => {
     const sleep = ms => new Promise(r => setTimeout(r, ms));
     const errors = [];
-    const getHtml = async (url, tries = 3) => {
+    // Erkennt eine Prüfseite statt des erwarteten Inhalts. expect: woran die richtige Seite zu erkennen ist.
+    const MAIN = /<main[\s>]/i;
+    const isBlocked = (status, html, expect = MAIN) => status === 403 || status === 429 ||
+      (!!html && /captcha|cf-challenge/i.test(html) && !expect.test(html));
+    let badInRow = 0; // Seiten in Folge ohne erwarteten Inhalt: ab 5 wird eine Sperre angenommen
+    // Bei einer Prüfung: Background holt den Tab nach vorne, hier wird gewartet, bis sie gelöst ist.
+    let humanWait = null;
+    const waitForHuman = (url, expect = MAIN) => humanWait || (humanWait = (async () => {
+      chrome.runtime.sendMessage({ type: 'fcz-captcha', url: new URL(url, location.href).href });
+      const t0 = Date.now();
+      while (Date.now() - t0 < CAPTCHA_WAIT) {
+        await sleep(20e3);
+        try { const r = await fetch(url, { credentials: 'include' }); const h = await r.text(); if (r.ok && expect.test(h)) { badInRow = 0; chrome.runtime.sendMessage({ type: 'fcz-captcha-solved' }); humanWait = null; return; } } catch (e) {}
+      }
+      throw new Error('Captcha-Prüfung wurde nicht gelöst');
+    })());
+    let last = 0;
+    const throttle = async () => { const wait = last + DELAY_MIN + Math.random() * (DELAY_MAX - DELAY_MIN) - Date.now(); if (wait > 0) await sleep(wait); last = Date.now(); };
+    const getHtml = async (url, expect = MAIN, tries = 3) => {
       for (let i = 0; i < tries; i++) {
-        try { const r = await fetch(url, { credentials: 'include' }); if (r.ok) return await r.text(); } catch (e) {}
-        await sleep(2000 * (i + 1));
+        if (humanWait) await humanWait;
+        await throttle();
+        try {
+          const r = await fetch(url, { credentials: 'include' }); const h = await r.text();
+          if (isBlocked(r.status, h, expect)) { await waitForHuman(url, expect); i--; continue; }
+          if (r.ok && expect.test(h)) { badInRow = 0; return h; }
+          if (++badInRow >= 5) { await waitForHuman(url, expect); i--; continue; }
+        } catch (e) { if (/Captcha/.test(String(e))) throw e; }
+        await sleep(5000 * (i + 1));
       }
       errors.push(url); return null;
     };
@@ -40,62 +73,92 @@ function crawlFotbalCz(cfg) {
       return out;
     };
 
+    // Zwischenspeicher vom letzten Lauf (chrome.storage.local, nur auf diesem Rechner)
+    const { cache: old } = await chrome.storage.local.get('cache');
+    const cache = old && old.v === 2 ? old : { v: 2, comps: {} };
+    const save = () => chrome.storage.local.set({ cache });
+    const t0 = Date.now();
+    let fetched = 0, reused = 0;
+
     // 1. Vereine mit Koordinaten (Vereinskarte)
-    progress('Vereinskarte …');
-    const mapHtml = await getHtml('/club/hledej');
-    if (!mapHtml) throw new Error('Vereinskarte nicht erreichbar');
-    const clubs = {};
-    for (const m of mapHtml.matchAll(/L\.marker\(\[([\d.]+),\s*([\d.]+)\]\)[\s\S]{0,80}?createMarker\("([^"]*)",\s*[^,]*,\s*"([^"]*)"/g)) {
-      const id = (m[4].match(/club\/club\/([0-9a-f-]{36})/) || [])[1]; if (!id) continue;
-      clubs[id] = [m[3], +(+m[1]).toFixed(5), +(+m[2]).toFixed(5)];
+    if (!cache.clubs || t0 - cache.clubs.at > CLUBS_MAX_AGE) {
+      progress('Vereinskarte …');
+      const mapHtml = await getHtml('/club/hledej', /L\.marker/);
+      if (!mapHtml) throw new Error('Vereinskarte nicht erreichbar');
+      const data = {};
+      for (const m of mapHtml.matchAll(/L\.marker\(\[([\d.]+),\s*([\d.]+)\]\)[\s\S]{0,80}?createMarker\("([^"]*)",\s*[^,]*,\s*"([^"]*)"/g)) {
+        const id = (m[4].match(/club\/club\/([0-9a-f-]{36})/) || [])[1]; if (!id) continue;
+        data[id] = [m[3], +(+m[1]).toFixed(5), +(+m[2]).toFixed(5)];
+      }
+      if (Object.keys(data).length < 1000) throw new Error('Vereinskarte unvollständig (' + Object.keys(data).length + ' Vereine)');
+      cache.clubs = { at: t0, data }; await save();
     }
-    if (Object.keys(clubs).length < 1000) throw new Error('Vereinskarte unvollständig (' + Object.keys(clubs).length + ' Vereine)');
+    const clubs = cache.clubs.data;
 
-    // 2. Verbände
-    progress('Verbände …');
-    const rz = await parse('/souteze/subjekty/');
-    if (!rz) throw new Error('Rozcestník nicht erreichbar');
-    const subjects = []; let kraj = null;
-    for (const a of rz.querySelectorAll('main a')) {
-      const m = (a.getAttribute('href') || '').match(/subjekt\/(\d+)/); if (!m) continue;
-      const name = txt(a); const isKraj = /kraj$|^Hl\. město Praha/.test(name);
-      if (isKraj) kraj = name;
-      subjects.push({ id: +m[1], name, kraj: isKraj ? name : kraj, type: kraj === null ? 'national' : (isKraj ? 'KFS' : 'OFS') });
+    // 2. + 3. Verbände, ihre Wettbewerbe (Tabelle) und Řídící komise (Linkliste)
+    if (!cache.index || t0 - cache.index.at > INDEX_MAX_AGE) {
+      progress('Verbände …');
+      const rz = await parse('/souteze/subjekty/');
+      if (!rz) throw new Error('Rozcestník nicht erreichbar');
+      const subjects = []; let kraj = null;
+      for (const a of rz.querySelectorAll('main a')) {
+        const m = (a.getAttribute('href') || '').match(/subjekt\/(\d+)/); if (!m) continue;
+        const name = txt(a); const isKraj = /kraj$|^Hl\. město Praha/.test(name);
+        if (isKraj) kraj = name;
+        subjects.push({ id: +m[1], name, kraj: isKraj ? name : kraj, type: kraj === null ? 'national' : (isKraj ? 'KFS' : 'OFS') });
+      }
+      const comps = []; const seen = new Set(); const rk = [];
+      let n = 0;
+      await pool(subjects, async sj => {
+        const d = await parse('/souteze/subjekty/subjekt/' + sj.id); progress('Verbände ' + (++n) + '/' + subjects.length); if (!d) return;
+        for (const tr of d.querySelectorAll('main tr')) {
+          const tds = [...tr.querySelectorAll('td')]; if (tds.length < 3) continue;
+          const a = [...tr.querySelectorAll('a')].find(x => /turnaje\/zapas\//.test(x.getAttribute('href') || '')); if (!a) continue;
+          const id = a.getAttribute('href').match(/zapas\/([0-9a-f-]{36})/)[1]; if (seen.has(id)) continue; seen.add(id);
+          comps.push({ id, code: txt(tds[0]), name: txt(tds[1]), teams: parseInt(txt(tds[2])) || null, subj: sj.id });
+        }
+        if (!d.querySelector('main tr')) {
+          for (const a of d.querySelectorAll('a')) { const m = (a.getAttribute('href') || '').match(/turnaje\/hlavni\/([0-9a-f-]{36})/); if (m && !seen.has(m[1])) { seen.add(m[1]); rk.push({ id: m[1], subj: sj.id }); } }
+        }
+      });
+      if (comps.length < 500) throw new Error('Nur ' + comps.length + ' Wettbewerbe gefunden');
+      cache.index = { at: t0, subjects, comps, rk }; await save();
     }
+    const { subjects, comps, rk } = cache.index;
 
-    // 3. Wettbewerbe je Verband (Tabelle) und Řídící komise (Linkliste)
-    const comps = []; const seen = new Set(); const rk = [];
+    // 4. Spiele. Ein Wettbewerb wird neu geladen, außer beim letzten Laden waren alle Spiele schon vorbei
+    // (dann ändern sich Datum, Zeit und Ort nicht mehr). Fortschritt wird laufend gespeichert,
+    // damit ein abgebrochener Lauf beim nächsten Mal nicht von vorn beginnt.
+    const fresh = id => {
+      const c = cache.comps[id]; if (!c) return false;
+      if (c.runStart === t0 || c.runStart === cache.runStart) return true; // in diesem bzw. dem abgebrochenen Lauf schon geladen
+      if (!c.matches.length) return false;
+      const lastMatch = Math.max(...c.matches.map(m => m.dt ? Date.parse(m.dt) : Infinity));
+      return lastMatch + FINISHED_MARGIN < c.at;
+    };
+    if (!cache.runStart || cache.runDone || t0 - cache.runStart > 2 * 86400e3) { cache.runStart = t0; cache.runDone = false; }
+    const all = [...comps.map(c => ({ ...c, kind: 'comp' })), ...rk.map(c => ({ ...c, kind: 'rk' }))];
     let n = 0;
-    await pool(subjects, async sj => {
-      const d = await parse('/souteze/subjekty/subjekt/' + sj.id); progress('Verbände ' + (++n) + '/' + subjects.length); if (!d) return;
-      for (const tr of d.querySelectorAll('main tr')) {
-        const tds = [...tr.querySelectorAll('td')]; if (tds.length < 3) continue;
-        const a = [...tr.querySelectorAll('a')].find(x => /turnaje\/zapas\//.test(x.getAttribute('href') || '')); if (!a) continue;
-        const id = a.getAttribute('href').match(/zapas\/([0-9a-f-]{36})/)[1]; if (seen.has(id)) continue; seen.add(id);
-        comps.push({ id, code: txt(tds[0]), name: txt(tds[1]), teams: parseInt(txt(tds[2])) || null, subj: sj.id });
-      }
-      if (!d.querySelector('main tr')) {
-        for (const a of d.querySelectorAll('a')) { const m = (a.getAttribute('href') || '').match(/turnaje\/hlavni\/([0-9a-f-]{36})/); if (m && !seen.has(m[1])) { seen.add(m[1]); rk.push({ id: m[1], subj: sj.id }); } }
-      }
+    await pool(all, async c => {
+      if (++n % 50 === 0) progress('Wettbewerbe ' + n + '/' + all.length + ' (' + fetched + ' geladen, ' + reused + ' aus dem Speicher)');
+      if (fresh(c.id)) { reused++; return; }
+      const d = await parse('/souteze/turnaje/zapas/' + c.id); if (!d) return; // bei Fehler alten Stand behalten
+      cache.comps[c.id] = { at: Date.now(), runStart: cache.runStart, title: txt(d.querySelector('main h1')), matches: readMatches(d) };
+      if (++fetched % 25 === 0) await save();
     });
-    if (comps.length < 500) throw new Error('Nur ' + comps.length + ' Wettbewerbe gefunden');
+    cache.runDone = true; await save();
 
-    // 4. Spiele
     const teams = [], teamIdx = new Map(), venues = [], venueIdx = new Map(), matches = [];
     const tIdx = (nm, c) => { const k = nm + '|' + c; if (!teamIdx.has(k)) { teamIdx.set(k, teams.length); teams.push([nm, c]); } return teamIdx.get(k); };
     const vIdx = v => { if (!v) return -1; if (!venueIdx.has(v)) { venueIdx.set(v, venues.length); venues.push(v); } return venueIdx.get(v); };
-    n = 0;
-    await pool(comps, async (c, ci) => {
-      const d = await parse('/souteze/turnaje/zapas/' + c.id); if (++n % 50 === 0) progress('Wettbewerbe ' + n + '/' + comps.length); if (!d) return;
-      for (const m of readMatches(d)) matches.push([ci, m.round, tIdx(m.hn, m.hc), tIdx(m.an, m.ac), m.score, m.dt, vIdx(m.venue), m.spec, m.mid]);
-    });
+    comps.forEach((c, ci) => { for (const m of (cache.comps[c.id] || { matches: [] }).matches) matches.push([ci, m.round, tIdx(m.hn, m.hc), tIdx(m.an, m.ac), m.score, m.dt, vIdx(m.venue), m.spec, m.mid]); });
     const extra = { comps: [], matches: [] };
-    await pool(rk, async c => {
-      const d = await parse('/souteze/turnaje/zapas/' + c.id); if (!d) return;
-      const title = txt(d.querySelector('main h1')); const tm = title.match(/›\s*\d{4}\s+(\S+)\s+-\s+(.*)$/);
-      const ci = extra.comps.length; extra.comps.push({ id: c.id, subj: c.subj, title, code: tm ? tm[1] : '', name: tm ? tm[2] : title });
-      for (const m of readMatches(d)) extra.matches.push([ci, m.round, m.hn, m.hc, m.an, m.ac, m.score, m.dt, m.venue, m.spec, m.mid]);
-    });
+    for (const c of rk) {
+      const e = cache.comps[c.id]; if (!e) continue;
+      const tm = e.title.match(/›\s*\d{4}\s+(\S+)\s+-\s+(.*)$/);
+      const ci = extra.comps.length; extra.comps.push({ id: c.id, subj: c.subj, title: e.title, code: tm ? tm[1] : '', name: tm ? tm[2] : e.title });
+      for (const m of e.matches) extra.matches.push([ci, m.round, m.hn, m.hc, m.an, m.ac, m.score, m.dt, m.venue, m.spec, m.mid]);
+    }
     if (matches.length < 20000) throw new Error('Nur ' + matches.length + ' Spiele gefunden');
     if (errors.length > comps.length * 0.05) throw new Error(errors.length + ' Seiten nicht erreichbar');
 
@@ -117,7 +180,7 @@ function crawlFotbalCz(cfg) {
     let sha; const g = await fetch(api, { headers: H, credentials: 'omit' }); if (g.ok) sha = (await g.json()).sha; else if (g.status !== 404) throw new Error('GitHub ' + g.status + ' beim Lesen (Token/Repo prüfen)');
     const p = await fetch(api, { method: 'PUT', headers: H, credentials: 'omit', body: JSON.stringify({ message: 'Daten ' + now.toISOString().slice(0, 16).replace('T', ' ') + ': ' + (matches.length + extra.matches.length) + ' Spiele', content: b64, sha }) });
     if (!p.ok) throw new Error('GitHub ' + p.status + ' beim Hochladen: ' + (await p.text()).slice(0, 200));
-    done(true, (matches.length + extra.matches.length).toLocaleString('de-DE') + ' Spiele hochgeladen, ' + now.toLocaleString('de-DE'));
+    done(true, (matches.length + extra.matches.length).toLocaleString('de-DE') + ' Spiele hochgeladen (' + fetched + ' Wettbewerbe neu geladen, ' + reused + ' aus dem Speicher), ' + now.toLocaleString('de-DE'));
   })().catch(e => done(false, String(e && e.message || e)));
 
   return 'gestartet';

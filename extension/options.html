@@ -16,7 +16,7 @@
 </head>
 <body>
 <h1>Fotbal CZ Spielfinder Updater</h1>
-<p class="hint">Holt jeden Morgen um 6 Uhr die Spielpläne von fotbal.cz, sofern Chrome läuft. Verpasste Läufe werden beim nächsten Chrome-Start nachgeholt. Ein Lauf dauert etwa zehn Minuten.</p>
+<p class="hint">Holt jeden Montag um 6 Uhr die Spielpläne von fotbal.cz, sofern Chrome läuft. Ein verpasster Lauf wird beim nächsten Chrome-Start nachgeholt. Vereine und Wettbewerbsliste werden nur alle vier Wochen neu geladen, abgeschlossene Wettbewerbe gar nicht mehr. Die Abfrage ist absichtlich langsam und dauert ein bis zwei Stunden. Verlangt fotbal.cz eine Captcha-Prüfung, öffnet sich ein Tab mit Hinweis: Prüfung lösen, danach läuft der Abruf von selbst weiter.</p>
 <label for="repo">GitHub-Repo</label>
 <input id="repo" placeholder="Felizzo1/fotbal">
 <label for="token">GitHub-Token (fine-grained, nur dieses Repo, Contents: Read and write)</label>
@@ -27,6 +27,7 @@
 <p class="hint">Nach dem Erzeugen den Schlüssel kopieren und im Repo unter Settings → Secrets and variables → Actions als <b>RAW_PASSWORD</b> anlegen. Er wird nur einmal gebraucht und muss nicht weitergegeben werden.</p>
 <button id="save" type="button">Speichern</button>
 <button id="run" class="sec" type="button">Jetzt aktualisieren</button>
+<button id="clear" class="sec" type="button">Speicher leeren (nächster Lauf lädt alles neu)</button>
 <div class="status"><strong>Status:</strong> <span id="status">–</span><br><span class="hint" id="when"></span></div>
 <script src="options.js"></script>
 </body>
