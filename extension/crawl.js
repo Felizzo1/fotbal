@@ -1,17 +1,43 @@
 // Läuft im fotbal.cz-Tab (eingefügt per chrome.scripting.executeScript).
 // Muss in sich geschlossen sein: keine Verweise auf Variablen außerhalb der Funktion.
 function crawlFotbalCz(cfg) {
-  const CONCURRENCY = 3;
+  // Bewusst langsam: eine Anfrage nach der anderen mit 1,5–3 Sekunden Pause.
+  // Viele schnelle Anfragen lösen bei fotbal.cz die reCAPTCHA-Prüfung aus.
+  const CONCURRENCY = 1;
+  const DELAY_MIN = 1500, DELAY_MAX = 3000;
+  const CAPTCHA_WAIT = 3 * 3600e3; // so lange wird auf das Lösen einer Prüfung gewartet
   const progress = text => { try { chrome.runtime.sendMessage({ type: 'fcz-progress', text }); } catch (e) {} };
   const done = (ok, text) => { try { chrome.runtime.sendMessage({ type: 'fcz-done', ok, text }); } catch (e) {} };
 
   (async () => {
     const sleep = ms => new Promise(r => setTimeout(r, ms));
     const errors = [];
+    // Erkennt eine Prüfseite statt des erwarteten Inhalts
+    const isBlocked = (status, html) => status === 403 || status === 429 ||
+      (!!html && /recaptcha|g-recaptcha|hcaptcha|cf-challenge|captcha/i.test(html) && !/<main[\s>]/i.test(html));
+    // Bei einer Prüfung: Background holt den Tab nach vorne, hier wird gewartet, bis sie gelöst ist.
+    let humanWait = null;
+    const waitForHuman = url => humanWait || (humanWait = (async () => {
+      chrome.runtime.sendMessage({ type: 'fcz-captcha', url: new URL(url, location.href).href });
+      const t0 = Date.now();
+      while (Date.now() - t0 < CAPTCHA_WAIT) {
+        await sleep(20e3);
+        try { const r = await fetch(url, { credentials: 'include' }); const h = await r.text(); if (r.ok && !isBlocked(r.status, h)) { chrome.runtime.sendMessage({ type: 'fcz-captcha-solved' }); humanWait = null; return; } } catch (e) {}
+      }
+      throw new Error('Captcha-Prüfung wurde nicht gelöst');
+    })());
+    let last = 0;
+    const throttle = async () => { const wait = last + DELAY_MIN + Math.random() * (DELAY_MAX - DELAY_MIN) - Date.now(); if (wait > 0) await sleep(wait); last = Date.now(); };
     const getHtml = async (url, tries = 3) => {
       for (let i = 0; i < tries; i++) {
-        try { const r = await fetch(url, { credentials: 'include' }); if (r.ok) return await r.text(); } catch (e) {}
-        await sleep(2000 * (i + 1));
+        if (humanWait) await humanWait;
+        await throttle();
+        try {
+          const r = await fetch(url, { credentials: 'include' }); const h = await r.text();
+          if (isBlocked(r.status, h)) { await waitForHuman(url); i--; continue; }
+          if (r.ok) return h;
+        } catch (e) { if (/Captcha/.test(String(e))) throw e; }
+        await sleep(5000 * (i + 1));
       }
       errors.push(url); return null;
     };
