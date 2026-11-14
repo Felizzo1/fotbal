@@ -34,6 +34,7 @@ function crawlFotbalCz(cfg) {
     })());
     let last = 0;
     const throttle = async () => { const wait = last + DELAY_MIN + Math.random() * (DELAY_MAX - DELAY_MIN) - Date.now(); if (wait > 0) await sleep(wait); last = Date.now(); };
+    let lastFail = null; // letzte fehlgeschlagene Anfrage, für die Diagnose
     const getHtml = async (url, expect = MAIN, tries = 3) => {
       for (let i = 0; i < tries; i++) {
         if (humanWait) await humanWait;
@@ -42,13 +43,15 @@ function crawlFotbalCz(cfg) {
           const r = await fetch(url, { credentials: 'include' }); const h = await r.text();
           if (isBlocked(r.status, h, expect)) { await waitForHuman(url, expect); i--; continue; }
           if (r.ok && expect.test(h)) { badInRow = 0; return h; }
+          lastFail = { url, status: r.status, len: h.length, head: h.slice(0, 300) };
           if (++badInRow >= 5) { await waitForHuman(url, expect); i--; continue; }
-        } catch (e) { if (/Captcha/.test(String(e))) throw e; }
+        } catch (e) { if (/Captcha/.test(String(e))) throw e; lastFail = { url, error: String(e) }; }
         await sleep(5000 * (i + 1));
       }
       errors.push(url); return null;
     };
-    const parse = async url => { const h = await getHtml(url); return h ? new DOMParser().parseFromString(h, 'text/html') : null; };
+    const COMP_PAGE = /Rozpis a v|js-matchRoundSection/;
+    const parse = async (url, expect = MAIN) => { const h = await getHtml(url, expect); return h ? new DOMParser().parseFromString(h, 'text/html') : null; };
     const pool = async (items, fn) => { let i = 0; await Promise.all([...Array(CONCURRENCY)].map(async () => { while (i < items.length) { const k = i++; await fn(items[k], k); } })); };
     const txt = e => (e && e.textContent || '').replace(/\s+/g, ' ').trim();
     const uuidFromSrc = s => { const m = (s || '').match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})_crop/); return m ? m[1] : null; };
@@ -131,19 +134,29 @@ function crawlFotbalCz(cfg) {
     // damit ein abgebrochener Lauf beim nächsten Mal nicht von vorn beginnt.
     const fresh = id => {
       const c = cache.comps[id]; if (!c) return false;
+      if (!c.matches.length) return false; // leere Ergebnisse nie übernehmen (könnten von einer Prüfseite stammen)
       if (c.runStart === t0 || c.runStart === cache.runStart) return true; // in diesem bzw. dem abgebrochenen Lauf schon geladen
-      if (!c.matches.length) return false;
       const lastMatch = Math.max(...c.matches.map(m => m.dt ? Date.parse(m.dt) : Infinity));
       return lastMatch + FINISHED_MARGIN < c.at;
     };
     if (!cache.runStart || cache.runDone || t0 - cache.runStart > 2 * 86400e3) { cache.runStart = t0; cache.runDone = false; }
+    let diag = null;
     const all = [...comps.map(c => ({ ...c, kind: 'comp' })), ...rk.map(c => ({ ...c, kind: 'rk' }))];
     let n = 0;
     await pool(all, async c => {
       if (++n % 50 === 0) progress('Wettbewerbe ' + n + '/' + all.length + ' (' + fetched + ' geladen, ' + reused + ' aus dem Speicher)');
       if (fresh(c.id)) { reused++; return; }
-      const d = await parse('/souteze/turnaje/zapas/' + c.id); if (!d) return; // bei Fehler alten Stand behalten
-      cache.comps[c.id] = { at: Date.now(), runStart: cache.runStart, title: txt(d.querySelector('main h1')), matches: readMatches(d) };
+      // Eine echte Wettbewerbsseite heißt „Rozpis a výsledky“; eine Prüf- oder Fehlerseite mit <main> zählt so nicht als Erfolg.
+      const d = await parse('/souteze/turnaje/zapas/' + c.id, COMP_PAGE); if (!d) return; // bei Fehler alten Stand behalten
+      const ms = readMatches(d);
+      if (!ms.length && !diag) { // erste Wettbewerbsseite ohne Spiele für die Diagnose merken
+        diag = { url: '/souteze/turnaje/zapas/' + c.id, at: new Date().toISOString(), title: txt(d.querySelector('title')), h1: txt(d.querySelector('main h1')),
+          sections: d.querySelectorAll('.js-matchRoundSection').length, items: d.querySelectorAll('li.MatchRound').length, len: d.documentElement.outerHTML.length };
+        await chrome.storage.local.set({ diag: { ...diag, html: d.documentElement.outerHTML.slice(0, 2e6) } });
+      }
+      const prev = cache.comps[c.id];
+      if (!ms.length && prev && prev.matches.length) { fetched++; return; } // nicht mit einem leeren Ergebnis überschreiben
+      cache.comps[c.id] = { at: Date.now(), runStart: cache.runStart, title: txt(d.querySelector('main h1')), matches: ms };
       if (++fetched % 25 === 0) await save();
     });
     cache.runDone = true; await save();
@@ -159,7 +172,13 @@ function crawlFotbalCz(cfg) {
       const ci = extra.comps.length; extra.comps.push({ id: c.id, subj: c.subj, title: e.title, code: tm ? tm[1] : '', name: tm ? tm[2] : e.title });
       for (const m of e.matches) extra.matches.push([ci, m.round, m.hn, m.hc, m.an, m.ac, m.score, m.dt, m.venue, m.spec, m.mid]);
     }
-    if (matches.length < 20000) throw new Error('Nur ' + matches.length + ' Spiele gefunden');
+    if (matches.length < 20000) {
+      const parts = ['Nur ' + matches.length + ' Spiele gefunden', fetched + ' Wettbewerbe geladen, ' + reused + ' aus dem Speicher, ' + errors.length + ' Seiten nicht erreichbar'];
+      if (diag) parts.push('Beispielseite ohne Spiele: „' + diag.title + '“, ' + diag.len + ' Zeichen, ' + diag.sections + ' Spieltag-Abschnitte, ' + diag.items + ' Spiel-Einträge (in den Optionen „Diagnose speichern“)');
+      if (lastFail) parts.push('Letzter Fehler: ' + lastFail.url + ' → ' + (lastFail.error || 'Status ' + lastFail.status + ', ' + lastFail.len + ' Zeichen'));
+      await chrome.storage.local.set({ diagSummary: parts.join(' · '), diagFail: lastFail });
+      throw new Error(parts.join(' · '));
+    }
     if (errors.length > comps.length * 0.05) throw new Error(errors.length + ' Seiten nicht erreichbar');
 
     // 5. Packen und nach GitHub hochladen
