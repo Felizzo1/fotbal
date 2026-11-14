@@ -3,7 +3,7 @@ name: Seite bauen und veröffentlichen
 on:
   push:
     branches: [main]
-    paths: ["raw/**", "site/**", "scripts/**", ".github/workflows/**"]
+    paths: ["raw/**", "site/**", "scripts/**", "data/**", ".github/workflows/**"]
   workflow_dispatch:
 
 permissions:
