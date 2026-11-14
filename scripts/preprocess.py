@@ -33,7 +33,7 @@ for m in extra.get('matches', []):
     matches.append((ci + off, rnd, hn, hc, an, ac, score, dt, venue, spec))
 
 # ---------- Kategorie und Ligaebene ----------
-CATS = ['Männer', 'Frauen', 'Dorost U19/U17', 'Žáci U15/U13', 'Přípravka U11 und jünger', 'Futsal/Sonstiges']
+CATS = ['Männer', 'Frauen', 'Junioren U19/U17', 'Jugend U15/U13', 'Kinder U11 und jünger', 'Futsal/Sonstiges']
 
 def classify(c):
     n = c['name'].lower()
