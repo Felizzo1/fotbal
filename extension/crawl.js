@@ -50,7 +50,8 @@ function crawlFotbalCz(cfg) {
       }
       errors.push(url); return null;
     };
-    const parse = async url => { const h = await getHtml(url); return h ? new DOMParser().parseFromString(h, 'text/html') : null; };
+    const COMP_PAGE = /Rozpis a v|js-matchRoundSection/;
+    const parse = async (url, expect = MAIN) => { const h = await getHtml(url, expect); return h ? new DOMParser().parseFromString(h, 'text/html') : null; };
     const pool = async (items, fn) => { let i = 0; await Promise.all([...Array(CONCURRENCY)].map(async () => { while (i < items.length) { const k = i++; await fn(items[k], k); } })); };
     const txt = e => (e && e.textContent || '').replace(/\s+/g, ' ').trim();
     const uuidFromSrc = s => { const m = (s || '').match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})_crop/); return m ? m[1] : null; };
@@ -133,8 +134,8 @@ function crawlFotbalCz(cfg) {
     // damit ein abgebrochener Lauf beim nächsten Mal nicht von vorn beginnt.
     const fresh = id => {
       const c = cache.comps[id]; if (!c) return false;
+      if (!c.matches.length) return false; // leere Ergebnisse nie übernehmen (könnten von einer Prüfseite stammen)
       if (c.runStart === t0 || c.runStart === cache.runStart) return true; // in diesem bzw. dem abgebrochenen Lauf schon geladen
-      if (!c.matches.length) return false;
       const lastMatch = Math.max(...c.matches.map(m => m.dt ? Date.parse(m.dt) : Infinity));
       return lastMatch + FINISHED_MARGIN < c.at;
     };
@@ -145,13 +146,16 @@ function crawlFotbalCz(cfg) {
     await pool(all, async c => {
       if (++n % 50 === 0) progress('Wettbewerbe ' + n + '/' + all.length + ' (' + fetched + ' geladen, ' + reused + ' aus dem Speicher)');
       if (fresh(c.id)) { reused++; return; }
-      const d = await parse('/souteze/turnaje/zapas/' + c.id); if (!d) return; // bei Fehler alten Stand behalten
+      // Eine echte Wettbewerbsseite heißt „Rozpis a výsledky“; eine Prüf- oder Fehlerseite mit <main> zählt so nicht als Erfolg.
+      const d = await parse('/souteze/turnaje/zapas/' + c.id, COMP_PAGE); if (!d) return; // bei Fehler alten Stand behalten
       const ms = readMatches(d);
       if (!ms.length && !diag) { // erste Wettbewerbsseite ohne Spiele für die Diagnose merken
         diag = { url: '/souteze/turnaje/zapas/' + c.id, at: new Date().toISOString(), title: txt(d.querySelector('title')), h1: txt(d.querySelector('main h1')),
           sections: d.querySelectorAll('.js-matchRoundSection').length, items: d.querySelectorAll('li.MatchRound').length, len: d.documentElement.outerHTML.length };
         await chrome.storage.local.set({ diag: { ...diag, html: d.documentElement.outerHTML.slice(0, 2e6) } });
       }
+      const prev = cache.comps[c.id];
+      if (!ms.length && prev && prev.matches.length) { fetched++; return; } // nicht mit einem leeren Ergebnis überschreiben
       cache.comps[c.id] = { at: Date.now(), runStart: cache.runStart, title: txt(d.querySelector('main h1')), matches: ms };
       if (++fetched % 25 === 0) await save();
     });
