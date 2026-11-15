@@ -33,7 +33,8 @@ for m in extra.get('matches', []):
     matches.append((ci + off, rnd, hn, hc, an, ac, score, dt, venue, spec))
 
 # ---------- Kategorie und Ligaebene ----------
-CATS = ['Männer', 'Frauen', 'Junioren U19/U17', 'Jugend U15/U13', 'Kinder U11 und jünger', 'Futsal/Sonstiges']
+# Auf der Seite nur Männer und Frauen; Jugend, Futsal und Alte Herren werden unten aussortiert
+CATS = ['Männer', 'Frauen']
 
 def classify(c):
     n = c['name'].lower()
@@ -79,6 +80,12 @@ def short_name(c):
     n = re.sub(r'^\s*\d{1,2}\.\s*LIGA\s+[A-ZČŠŘŽÝÁÍÉÚŮ\s\-]*?-\s*[A-Z]\d[A-Z]\s+', '', n)  # "6.LIGA SELECT - A2A "
     n = re.sub(r'\s+', ' ', n).strip()
     return n
+
+# Nur Wettbewerbe der Männer und Frauen behalten (Indizes neu durchnummerieren)
+keep = [i for i, c in enumerate(comps) if classify(c)[0] < len(CATS)]
+remap = {o: n for n, o in enumerate(keep)}
+comps = [comps[i] for i in keep]
+matches = [(remap[m[0]],) + tuple(m[1:]) for m in matches if m[0] in remap]
 
 # ---------- Orte und Koordinaten ----------
 def norm(s):
@@ -149,6 +156,139 @@ for m in matches:
     place_list[pi]['home'][hn] += 1
     match_place.append(pi)
 
+# ---------- Europlan-Stadien zuordnen (data/europlan.json, erzeugt von scripts/europlan.py) ----------
+# Reihenfolge: 1. Liga bei Europlan + Heimverein, 2. Verein allein, 3. Entfernung, 4. Ortsname im Spielort-Text.
+# Der Spielort-Text von fotbal.cz muss jeweils zum Stadion passen. Zugeordnete Orte bekommen die Stadion-Koordinaten.
+import math, os
+EP_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'europlan.json')
+EP_GENERIC = re.compile(r'^(tj|sk|fk|fc|afk|mfk|sfk|sc|ss|ofk|telovychovna|jednota|sportovni|fotbalovy|klub|football|club|sokol|zeny|zen|zs|as|os|sro|spolek|[a-dfosrz])$')
+
+def club_key(n):
+    n = norm(re.sub(r',.*$', '', n.replace('"', ' ')))
+    return ' '.join(w for w in n.split() if not EP_GENERIC.match(w) and not re.match(r'^\d{4}$', w))
+
+def km(a, b, c, d):
+    r = math.pi / 180
+    x = math.sin((c - a) * r / 2) ** 2 + math.cos(a * r) * math.cos(c * r) * math.sin((d - b) * r / 2) ** 2
+    return 12742 * math.asin(math.sqrt(x))
+
+ep_href = [''] * len(place_list)
+ep_name = [''] * len(place_list)
+ep_stats = Counter()
+if os.path.exists(EP_PATH):
+    EPD = json.load(open(EP_PATH, encoding='utf-8'))
+    EP = EPD['stadiums']; EP_BY_ID = {s['id']: s for s in EP}
+    ep_by_club = defaultdict(list)
+    for s in EP:
+        for c in s['clubs']:
+            k = club_key(c)
+            if k and s not in ep_by_club[k]: ep_by_club[k].append(s)
+    grid = defaultdict(list)  # grobes Raster für die Umkreissuche
+    for s in EP:
+        grid[(round(s['lat'], 1), round(s['lon'], 1))].append(s)
+    def near(lat, lon, r=1):
+        out = []
+        for dy in range(-r, r + 1):
+            for dx in range(-r, r + 1):
+                out += grid.get((round(lat + dy / 10, 1), round(lon + dx / 10, 1)), [])
+        return out
+    ART = re.compile(r'\b(umt|ut|umela|umelka|kunstrasen|artificial)\b')
+    STOP = {'hriste', 'stadion', 'stadium', 'arena', 'areal', 'sportovni', 'fotbalove', 'fotbalovy', 'mestsky', 'tj', 'sk', 'fk', 'sokol', 'ul', 'na', 'u', 'v'}
+    SURF = {'trava', 'umt', 'ut', 'umela', 'umelka', 'zs', 'nad', 'pod', 'ul', 'tj', 'sk', 'fk', 'fc', 'ii', 'iii', 'uo'}
+    def toks(s): return {w for w in norm(s).split() if len(w) > 1 and w not in STOP and not w.isdigit()}
+    def nums(s): return set(re.findall(r'\b\d\b', norm(s)))
+    def place_words(venue): return {w for w in toks(venue) if w not in SURF and len(w) > 2}
+    def same(a, b): return a == b or (len(a) >= 5 and len(b) >= 5 and a[:5] == b[:5])
+    def consistent(venue, s):
+        """Nennt der Spielort-Text einen Ort, müssen alle Ortswörter im Stadion- oder Vereinsnamen vorkommen."""
+        vt = place_words(venue)
+        if not vt: return True  # z. B. nur „tráva“
+        st = toks(s['name'] + ' ' + ' '.join(s['clubs']))
+        return all(any(same(a, b) for b in st) for a in vt)  # Stará Paka ≠ Nová Paka
+    def score(venue, s):
+        """Wie gut passt der Spielort-Text zum Stadionnamen (bei Vereinen mit mehreren Plätzen)?"""
+        v, n = norm(venue), norm(s['name'])
+        sc = len(toks(venue) & toks(s['name']))
+        if bool(ART.search(v)) == bool(ART.search(n)): sc += 4   # Kunstrasen ja/nein stimmt überein (stärkstes Signal)
+        if nums(venue) and nums(venue) == nums(s['name']): sc += 3  # „hřiště 2“ / „tráva č.2“ schlägt die Ligaliste
+        if not nums(venue) and nums(s['name']): sc -= 1             # Nebenplatz nur, wenn genannt
+        return sc
+
+    # Wettbewerb -> Europlan-Liga über gemeinsame Vereine
+    leagues = []
+    for L in EPD.get('leagues', []):
+        ent = {}
+        for club, sid in L['entries']:
+            k = club_key(club)
+            if k and k not in ent: ent[k] = sid
+        if ent: leagues.append(ent)
+    lg_by_key = defaultdict(list)
+    for j, ent in enumerate(leagues):
+        for k in ent: lg_by_key[k].append(j)
+    comp_keys = defaultdict(set)
+    for m in matches:
+        comp_keys[m[0]].update(k for k in (club_key(m[2]), club_key(m[4])) if k)
+    comp_league = {}
+    for ci, ks in comp_keys.items():
+        cnt = Counter(j for k in ks for j in lg_by_key.get(k, ()))
+        if cnt:
+            j, ov = cnt.most_common(1)[0]
+            if ov >= 3 and ov >= 0.5 * min(len(ks), len(leagues[j])): comp_league[ci] = j
+    ep_stats['Wettbewerbe mit Europlan-Liga'] = len(comp_league)
+
+    def pick(p, team, prior):
+        """Stadion für Heimverein `team` am Ort `p`; `prior` = Platz laut Europlan-Liga (oder None)."""
+        cands = {s['id']: s for s in ep_by_club.get(club_key(team), [])
+                 if km(p['lat'], p['lon'], s['lat'], s['lon']) <= 15 and consistent(p['name'], s)}
+        if prior and consistent(p['name'], prior) and km(p['lat'], p['lon'], prior['lat'], prior['lon']) <= 25:
+            cands.setdefault(prior['id'], prior)
+        if not cands: return None
+        # Nennt der Spielort einen Ort, haben Stadien mit diesem Ort im Namen Vorrang (Javorník ≠ Vápenná);
+        # ein Kunstrasenplatz bleibt im Rennen, wenn der Spielort ausdrücklich Kunstrasen sagt (Ivančice ÚT → Němčice)
+        vt = place_words(p['name'])
+        if vt and len(cands) > 1:
+            named = {k: s for k, s in cands.items() if all(any(same(a, b) for b in toks(s['name'])) for a in vt)
+                     or (ART.search(norm(p['name'])) and ART.search(norm(s['name'])))}
+            if named: cands = named
+        if len(cands) == 1: return next(iter(cands.values()))
+        bonus = lambda s: 2.5 if prior and s['id'] == prior['id'] else 0
+        ranked = sorted(((score(p['name'], s) + bonus(s), s['id'], s) for s in cands.values()), key=lambda x: -x[0])
+        return ranked[0][2] if ranked[0][0] > ranked[1][0] else None
+
+    # Stimmen je Ort aus allen Heimspielen
+    votes = defaultdict(Counter); cache = {}
+    for m, pi in zip(matches, match_place):
+        if pi < 0: continue
+        prior = None
+        if m[0] in comp_league:
+            sid = leagues[comp_league[m[0]]].get(club_key(m[2]))
+            prior = EP_BY_ID.get(sid)
+        key = (pi, m[2], prior['id'] if prior else 0)
+        if key not in cache: cache[key] = pick(place_list[pi], m[2], prior)
+        s = cache[key]
+        votes[pi][s['id'] if s else 0] += 2 if prior else 1  # Liga-Angaben zählen doppelt
+    for i, p in enumerate(place_list):
+        best = None
+        nz = Counter({k: c for k, c in votes.get(i, {}).items() if k})  # Spiele ohne Treffer zählen nicht mit
+        if nz:
+            sid, n = nz.most_common(1)[0]
+            if n >= 0.6 * sum(nz.values()): best = EP_BY_ID[sid]; ep_stats['über Verein/Liga'] += 1
+            else: ep_stats['mehrdeutig'] += 1; continue
+        # nächstes Stadion bis 1 km, wenn kein zweites in der Nähe liegt
+        if not best:
+            cs = sorted(((km(p['lat'], p['lon'], s['lat'], s['lon']), s['id'], s) for s in near(p['lat'], p['lon']) if consistent(p['name'], s)), key=lambda x: x[0])
+            if cs and cs[0][0] <= 1.0 and (len(cs) == 1 or cs[1][0] > 1.0): best = cs[0][2]; ep_stats['über Entfernung'] += 1
+        # Spielort-Text nennt einen Ort: eindeutiges Stadion mit diesem Ort bis 15 km
+        if not best and place_words(p['name']):
+            cs = {s['id']: s for s in near(p['lat'], p['lon'], 2) if km(p['lat'], p['lon'], s['lat'], s['lon']) <= 15 and consistent(p['name'], s)}
+            if len(cs) == 1: best = next(iter(cs.values())); ep_stats['über Ortsnamen'] += 1
+        if best:
+            ep_href[i] = best['href']; ep_name[i] = best['name']
+            p['lat'], p['lon'] = best['lat'], best['lon']  # genauer als der Vereinssitz
+            p['ok'], p['kr'] = locate(p['lat'], p['lon'], OK), locate(p['lat'], p['lon'], KR)
+    ep_stats['ohne'] = sum(1 for h in ep_href if not h)
+    print('Europlan:', len(EP), 'Stadien;', dict(ep_stats))
+
 # Polygone benennen: Mehrheit der Wettbewerbs-Verbände, deren Heimspiele darin liegen
 ok_votes = defaultdict(Counter); kr_votes = defaultdict(Counter)
 for m, pi in zip(matches, match_place):
@@ -169,88 +309,6 @@ okres_kraj = defaultdict(Counter)
 for p in place_list:
     if p['ok'] in okres_names and p['kr'] in kraj_names:
         okres_kraj[okres_names[p['ok']]][kraj_names[p['kr']]] += 1
-
-# ---------- Europlan-Stadien zuordnen (data/europlan.json, erzeugt von scripts/europlan.py) ----------
-import math, os
-EP_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'europlan.json')
-EP_GENERIC = re.compile(r'^(tj|sk|fk|fc|f\.?c\.?|afk|mfk|sfk|sc|ss|ofk|telovychovna|jednota|sportovni|fotbalovy|klub|football|club|sokol|zs|as|os|sro|spolek|[a-dfosrz])$')
-
-def club_key(n):
-    n = norm(re.sub(r',.*$', '', n.replace('"', ' ')))
-    return ' '.join(w for w in n.split() if not EP_GENERIC.match(w) and not re.match(r'^\d{4}$', w))
-
-def km(a, b, c, d):
-    r = math.pi / 180
-    x = math.sin((c - a) * r / 2) ** 2 + math.cos(a * r) * math.cos(c * r) * math.sin((d - b) * r / 2) ** 2
-    return 12742 * math.asin(math.sqrt(x))
-
-ep_href = [''] * len(place_list)
-if os.path.exists(EP_PATH):
-    EP = json.load(open(EP_PATH, encoding='utf-8'))['stadiums']
-    ep_by_club = defaultdict(list)
-    for s in EP:
-        for c in s['clubs']:
-            k = club_key(c)
-            if k: ep_by_club[k].append(s)
-    grid = defaultdict(list)  # grobes Raster für die Umkreissuche
-    for s in EP:
-        grid[(round(s['lat'], 1), round(s['lon'], 1))].append(s)
-    def near(lat, lon, r=1):
-        out = []
-        for dy in range(-r, r + 1):
-            for dx in range(-r, r + 1):
-                out += grid.get((round(lat + dy / 10, 1), round(lon + dx / 10, 1)), [])
-        return out
-    ART = re.compile(r'\b(umt|ut|umela|umelka|kunstrasen|artificial)\b')
-    STOP = {'hriste', 'stadion', 'stadium', 'arena', 'areal', 'sportovni', 'fotbalove', 'fotbalovy', 'mestsky', 'tj', 'sk', 'fk', 'sokol', 'ul', 'na', 'u', 'v'}
-    def toks(s): return {w for w in norm(s).split() if len(w) > 1 and w not in STOP and not w.isdigit()}
-    def nums(s): return set(re.findall(r'\b\d\b', norm(s)))
-    def score(venue, s):
-        """Wie gut passt der Spielort-Text von fotbal.cz zum Stadionnamen bei Europlan?"""
-        v, n = norm(venue), norm(s['name'])
-        sc = len(toks(venue) & toks(s['name']))
-        if bool(ART.search(v)) == bool(ART.search(n)): sc += 2   # Kunstrasen ja/nein stimmt überein
-        if nums(venue) and nums(venue) == nums(s['name']): sc += 2  # „hřiště 2“
-        if not nums(venue) and nums(s['name']): sc -= 1             # Nebenplatz nur, wenn genannt
-        return sc
-    SURF = {'trava', 'umt', 'ut', 'umela', 'umelka', 'zs', 'nad', 'pod', 'ul', 'tj', 'sk', 'fk', 'fc', 'ii', 'iii'}
-    def same(a, b): return a == b or (len(a) >= 5 and len(b) >= 5 and a[:5] == b[:5])
-    def consistent(venue, s):
-        """Nennt der Spielort-Text einen Ort, muss er im Stadion- oder Vereinsnamen vorkommen."""
-        vt = {w for w in toks(venue) if w not in SURF and len(w) > 2}
-        if not vt: return True  # z. B. nur „tráva“
-        st = toks(s['name'] + ' ' + ' '.join(s['clubs']))
-        return all(any(same(a, b) for b in st) for a in vt)  # alle Ortswörter müssen vorkommen (Stará Paka ≠ Nová Paka)
-    by_name = by_dist = by_town = ambiguous = 0
-    for i, p in enumerate(place_list):
-        best = None
-        # 1. Verein passt (Name ohne Rechtsform/Mannschaftsbuchstabe), Stadien bis 15 km
-        cands = {s['id']: s for t, _ in p['home'].most_common() for s in ep_by_club.get(club_key(t), [])
-                 if km(p['lat'], p['lon'], s['lat'], s['lon']) <= 15 and consistent(p['name'], s)}
-        if len(cands) == 1:
-            best = next(iter(cands.values())); by_name += 1
-        elif cands:
-            # Verein mit mehreren Plätzen: nur bei eindeutigem Gewinner nach Spielort-Text
-            ranked = sorted(((score(p['name'], s), s) for s in cands.values()), key=lambda x: -x[0])
-            if ranked[0][0] > ranked[1][0]:
-                best = ranked[0][1]; by_name += 1
-            else:
-                ambiguous += 1; continue
-        # 2. sonst nächstes Stadion bis 1 km (nur wenn dort kein zweites Stadion in der Nähe liegt)
-        if not best:
-            cs = [(km(p['lat'], p['lon'], s['lat'], s['lon']), s['id'], s) for s in near(p['lat'], p['lon']) if consistent(p['name'], s)]
-            cs.sort(key=lambda x: x[0])
-            if cs and cs[0][0] <= 1.0 and (len(cs) == 1 or cs[1][0] > 1.0):
-                best = cs[0][2]; by_dist += 1
-        # 3. Spielort-Text nennt einen Ort: Stadion mit diesem Ort im Namen bis 15 km um den Verein, wenn eindeutig
-        if not best and {w for w in toks(p['name']) if w not in SURF and len(w) > 2}:
-            cs = {s['id']: s for s in near(p['lat'], p['lon'], 2)
-                  if km(p['lat'], p['lon'], s['lat'], s['lon']) <= 15 and consistent(p['name'], s)}
-            if len(cs) == 1:
-                best = next(iter(cs.values())); by_town += 1
-        if best: ep_href[i] = best['href']
-    print('Europlan:', len(EP), 'Stadien; zugeordnet', by_name, 'über Verein,', by_dist, 'über Entfernung,', by_town, 'über Ortsnamen;',
-          ambiguous, 'mehrdeutig; ohne', len(place_list) - by_name - by_dist - by_town)
 
 # ---------- Ausgabe ----------
 comp_out = []
@@ -276,7 +334,7 @@ for i, p in enumerate(place_list):
     P.append([p['name'], round(p['lat'], 5), round(p['lon'], 5),
               OKRESY.index(okres_names[p['ok']]) if p['ok'] in okres_names else -1,
               KRAJE.index(kraj_names[p['kr']]) if p['kr'] in kraj_names else -1,
-              ep_href[i]])
+              ep_href[i], ep_name[i]])
 
 out = {
     'generated': R['generated'], 'season': R.get('season', ''),

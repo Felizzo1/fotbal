@@ -37,6 +37,7 @@ def main(out):
     ligen = sorted(set(int(x) for x in re.findall(r's=liga&(?:amp;)?id=(\d+)', land)))
     print(len(ligen), 'Ligen')
     stadien = {}
+    liga_list = []  # pro Liga: welcher Verein spielt auf welchem Platz
     for k, lid in enumerate(ligen, 1):
         time.sleep(DELAY)
         h = get(f'{BASE}index.php?s=liga&id={lid}')
@@ -44,7 +45,9 @@ def main(out):
             continue
         liga = html.unescape((re.search(r'<h1[^>]*>(.*?)<', h, re.S) or [None, ''])[1]).strip()
         n = 0
+        entries = []
         for lon, lat, club, name, href, sid in MARKER.findall(h):
+            entries.append([html.unescape(club).strip(), int(sid)])
             s = stadien.setdefault(int(sid), {'id': int(sid), 'name': html.unescape(name).strip(),
                                               'lat': round(float(lat), 5), 'lon': round(float(lon), 5),
                                               'href': href, 'clubs': [], 'ligen': []})
@@ -54,9 +57,10 @@ def main(out):
             if liga and liga not in s['ligen']:
                 s['ligen'].append(liga)
             n += 1
+        liga_list.append({'id': lid, 'name': liga, 'entries': entries})
         print(f'{k}/{len(ligen)} {liga}: {n} Stadien, gesamt {len(stadien)}', flush=True)
     data = {'generated': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'source': BASE,
-            'stadiums': sorted(stadien.values(), key=lambda s: s['id'])}
+            'stadiums': sorted(stadien.values(), key=lambda s: s['id']), 'leagues': liga_list}
     with open(out, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=0)
     print('fertig:', len(stadien), 'Stadien ->', out)

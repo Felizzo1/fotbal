@@ -353,6 +353,11 @@ function epTerm(team){ const w=team.replace(/["„“]/g,'').replace(/,.*$/,'').
 function epUrl(team){ return 'https://www.europlan-online.de/index.php?s=search&search='+encodeURIComponent(epTerm(team)); }
 // Direktlink zum Stadion, wenn die Aufbereitung eins zuordnen konnte (p[5]), sonst die Suche
 function epLink(p,team){ return p&&p[5]?'<a href="https://www.europlan-online.de/'+esc(p[5])+'" target="_blank" rel="noopener">Europlan</a>':'<a href="'+epUrl(team)+'" target="_blank" rel="noopener" title="Kein Stadion zugeordnet, öffnet die Suche">Europlan-Suche</a>'; }
+// Google Maps: mit zugeordnetem Stadion dessen Namen an genau dieser Stelle suchen (öffnet meist den Eintrag),
+// sonst Fußballplätze rund um den Vereinssitz
+function gmLink(p){ if(!p) return ''; const u=p[5]?'https://www.google.com/maps/search/'+encodeURIComponent(p[6]||p[0])+'/@'+p[1]+','+p[2]+',17z':'https://www.google.com/maps/search/'+encodeURIComponent('fotbalové hřiště')+'/@'+p[1]+','+p[2]+',14z';
+  return '<a href="'+u+'" target="_blank" rel="noopener"'+(p[5]?'':' title="Kein Stadion zugeordnet, zeigt Fußballplätze in der Nähe"')+'>Google Maps</a>'; }
+const pk=pi=>P[pi][1]+','+P[pi][2]; // Orte auf demselben Stadion teilen sich einen Kartenpunkt
 function lvlBadge(c){ return c[2]?'<span class="lvl l'+c[2]+'" title="'+c[2]+'. Liga">'+c[2]+'</span>':''; }
 
 function render(fit){
@@ -375,7 +380,7 @@ function render(fit){
     const d=m[1].slice(0,10); if(d!==last){ h+='<div class="day">'+dayLabel(d)+'</div>'; last=d; }
     const c=C[m[0]], p=m[5]>=0?P[m[5]]:null;
     h+='<div class="m" data-p="'+m[5]+'"><span class="t">'+(m[1].slice(11,16)||'–')+'</span><span class="teams">'+esc(D.teams[m[2]])+' – '+esc(D.teams[m[3]])+'</span><span class="sc">'+esc(m[4]||'')+'</span>'+
-       '<span class="sub">'+lvlBadge(c)+'<span>'+esc(c[0])+'</span>'+(p?'<span>'+esc(p[0])+(km!==null?' · '+km.toFixed(0)+' km':'')+'</span>':'')+epLink(p,D.teams[m[2]])+'<a href="'+compUrl(c)+'" target="_blank" rel="noopener">fotbal.cz</a></span></div>';
+       '<span class="sub">'+lvlBadge(c)+'<span>'+esc(c[0])+'</span>'+(p?'<span>'+esc(p[0])+(km!==null?' · '+km.toFixed(0)+' km':'')+'</span>':'')+epLink(p,D.teams[m[2]])+gmLink(p)+'<a href="'+compUrl(c)+'" target="_blank" rel="noopener">fotbal.cz</a></span></div>';
   });
   if(R.length>S.limit) h+='<button class="btn more" type="button" id="moreb">Weitere '+Math.min(200,R.length-S.limit)+' von '+(R.length-S.limit).toLocaleString('de-DE')+' anzeigen</button>';
   L1.innerHTML=h;
@@ -383,17 +388,16 @@ function render(fit){
   L1.querySelectorAll('.m').forEach(el=>el.onclick=ev=>{ if(ev.target.tagName==='A') return; const pi=+el.dataset.p; if(pi<0) return; pendingFit=null; if(matchMedia('(max-width:820px)').matches) setView('map'); map.setView([P[pi][1],P[pi][2]],Math.max(map.getZoom(),11)); openPlace(pi); });
   // Karte
   markers.clearLayers(); byPlace=new Map();
-  for(const [m] of R){ if(m[5]<0) continue; if(!byPlace.has(m[5])) byPlace.set(m[5],[]); byPlace.get(m[5]).push(m); }
+  for(const [m] of R){ if(m[5]<0) continue; const k=pk(m[5]); if(!byPlace.has(k)) byPlace.set(k,[]); byPlace.get(k).push(m); }
   const hot=tok('--hot');
   const pts=[];
   // Alle Punkte rot und gleich groß; mehrere Spiele am selben Ort zeigen die Anzahl im Punkt
-  for(const [pi,ms] of byPlace){
-    const p=P[pi], n=ms.length;
+  for(const [,ms] of byPlace){
+    const pi=ms[0][5], p=P[pi], n=ms.length;
     const mk=n===1
       ? L.circleMarker([p[1],p[2]],{radius:7,color:'#fff',weight:1,fillColor:hot,fillOpacity:1})
       : L.marker([p[1],p[2]],{icon:L.divIcon({className:'',html:'<span class="cnt'+(n>9?' wide':'')+'">'+(n>99?'99+':n)+'</span>',iconSize:[n>9?24:18,18]}),title:n+' Spiele',keyboard:false});
     mk.on('click',()=>openPlace(pi)); mk.addTo(markers); pts.push([p[1],p[2]]);
-    markerOf.set(pi,mk);
   }
   if(circle){circle.remove(); circle=null;}
   if(S.center){ circle=L.circle([S.center.lat,S.center.lon],{radius:S.radius*1000,color:hot,weight:1.5,fill:false,dashArray:'4 4',interactive:false}).addTo(map); }
@@ -401,10 +405,10 @@ function render(fit){
   if(fit){ pendingFit=()=>{ if(S.center&&circle) map.fitBounds(circle.getBounds(),{padding:[10,10]}); else if(pts.length) map.fitBounds(pts,{padding:[20,20],maxZoom:11}); };
     if($('#map').offsetWidth){ pendingFit(); pendingFit=null; } }
 }
-let byPlace=new Map(); const markerOf=new Map();
+let byPlace=new Map();
 function openPlace(pi){
-  const p=P[pi], ms=byPlace.get(pi)||[];
-  const html='<div class="popup"><h3>'+esc(p[0])+'</h3><div class="hint">'+[p[3]>=0?'Bezirk '+esc(D.okresy[p[3]][0]):'', ms.length?epLink(p,D.teams[ms[0][2]]):''].filter(Boolean).join(' · ')+'</div><ul>'+
+  const p=P[pi], ms=byPlace.get(pk(pi))||[];
+  const html='<div class="popup"><h3>'+esc(p[6]||p[0])+'</h3><div class="hint">'+[p[3]>=0?'Bezirk '+esc(D.okresy[p[3]][0]):'', ms.length?epLink(p,D.teams[ms[0][2]]):'', gmLink(p)].filter(Boolean).join(' · ')+'</div><ul>'+
     ms.slice(0,30).map(m=>{const c=C[m[0]]; return '<li><b>'+new Date(m[1].slice(0,10)+'T12:00').toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'numeric'})+' '+(m[1].slice(11,16))+'</b> '+esc(D.teams[m[2]])+' – '+esc(D.teams[m[3]])+(m[4]?' <b>'+esc(m[4])+'</b>':'')+'<br><span class="hint">'+(c[2]?c[2]+'. Liga · ':'')+esc(c[0])+'</span></li>';}).join('')+(ms.length>30?'<li>… und '+(ms.length-30)+' weitere</li>':'')+'</ul></div>';
   L.popup({maxWidth:320}).setLatLng([p[1],p[2]]).setContent(html).openOn(map);
 }
