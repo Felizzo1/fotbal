@@ -197,11 +197,44 @@ if os.path.exists(EP_PATH):
     SURF = {'trava', 'umt', 'ut', 'umela', 'umelka', 'zs', 'nad', 'pod', 'ul', 'tj', 'sk', 'fk', 'fc', 'ii', 'iii', 'uo'}
     def toks(s): return {w for w in norm(s).split() if len(w) > 1 and w not in STOP and not w.isdigit()}
     def nums(s): return set(re.findall(r'\b\d\b', norm(s)))
-    def place_words(venue): return {w for w in toks(venue) if w not in SURF and len(w) > 2}
+    # Ortswörterbuch: alle Wörter aus Europlan-Stadion- und Vereinsnamen. Wörter im Spielort-Text, die dort nie vorkommen
+    # (meist Straßennamen wie „Blümlova“), zählen nicht als Ortsangabe.
+    VOCAB = set(); VOCAB5 = set()
+    for s in EP:
+        for w in toks(s['name'] + ' ' + ' '.join(s['clubs'])):
+            VOCAB.add(w)
+            if len(w) >= 5: VOCAB5.add(w[:5])
+    def known(w): return w in VOCAB or (len(w) >= 5 and w[:5] in VOCAB5)
+    def place_words(venue): return {w for w in toks(venue) if w not in SURF and len(w) > 2 and known(w)}
+    # Vereinsname mit Abkürzungen: „Babice n. Svit.“ = „Babice nad Svitavou“, „A.F.C. Humpolec“ = „AFC Humpolec“
+    club_keys_by_tok = defaultdict(set)
+    for k in ep_by_club:
+        for w in k.split():
+            if len(w) >= 4: club_keys_by_tok[w[:4]].add(k)
+    def abbr_match(short, long):
+        lw = long.split()
+        return all(any(b.startswith(a) or a.startswith(b) for b in lw) for a in short.split())
+    _club_cache = {}
+    def club_stadiums(team):
+        k = club_key(team)
+        if k in _club_cache: return _club_cache[k]
+        res = list(ep_by_club.get(k, []))
+        if not res and k:
+            cand = set().union(*(club_keys_by_tok.get(w[:4], set()) for w in k.split() if len(w) >= 4)) if any(len(w) >= 4 for w in k.split()) else set()
+            # zuerst Vereine, die alle Wörter des fotbal.cz-Namens erklären („babice n svit“ → „babice nad svitavou“),
+            # erst danach kürzere Namen („babice“)
+            hits = [c for c in cand if abbr_match(k, c)] or [c for c in cand if abbr_match(c, k)]
+            if 0 < len(hits) <= 3:  # mehr Treffer = zu allgemein (z. B. nur „Praha“)
+                for c in hits:
+                    for s in ep_by_club[c]:
+                        if s not in res: res.append(s)
+        _club_cache[k] = res
+        return res
     def same(a, b): return a == b or (len(a) >= 5 and len(b) >= 5 and a[:5] == b[:5])
-    def consistent(venue, s):
-        """Nennt der Spielort-Text einen Ort, müssen alle Ortswörter im Stadion- oder Vereinsnamen vorkommen."""
-        vt = place_words(venue)
+    def consistent(venue, s, strict=False):
+        """Nennt der Spielort-Text einen Ort, müssen alle Ortswörter im Stadion- oder Vereinsnamen vorkommen.
+        strict: auch Wörter, die Europlan nicht kennt (ohne Vereinsbezug kann ein unbekannter Ort ein anderer Ort sein)."""
+        vt = {w for w in toks(venue) if w not in SURF and len(w) > 2} if strict else place_words(venue)
         if not vt: return True  # z. B. nur „tráva“
         st = toks(s['name'] + ' ' + ' '.join(s['clubs']))
         return all(any(same(a, b) for b in st) for a in vt)  # Stará Paka ≠ Nová Paka
@@ -238,7 +271,7 @@ if os.path.exists(EP_PATH):
 
     def pick(p, team, prior):
         """Stadion für Heimverein `team` am Ort `p`; `prior` = Platz laut Europlan-Liga (oder None)."""
-        cands = {s['id']: s for s in ep_by_club.get(club_key(team), [])
+        cands = {s['id']: s for s in club_stadiums(team)
                  if km(p['lat'], p['lon'], s['lat'], s['lon']) <= 15 and consistent(p['name'], s)}
         if prior and consistent(p['name'], prior) and km(p['lat'], p['lon'], prior['lat'], prior['lon']) <= 25:
             cands.setdefault(prior['id'], prior)
@@ -276,11 +309,11 @@ if os.path.exists(EP_PATH):
             else: ep_stats['mehrdeutig'] += 1; continue
         # nächstes Stadion bis 1 km, wenn kein zweites in der Nähe liegt
         if not best:
-            cs = sorted(((km(p['lat'], p['lon'], s['lat'], s['lon']), s['id'], s) for s in near(p['lat'], p['lon']) if consistent(p['name'], s)), key=lambda x: x[0])
+            cs = sorted(((km(p['lat'], p['lon'], s['lat'], s['lon']), s['id'], s) for s in near(p['lat'], p['lon']) if consistent(p['name'], s, strict=True)), key=lambda x: x[0])
             if cs and cs[0][0] <= 1.0 and (len(cs) == 1 or cs[1][0] > 1.0): best = cs[0][2]; ep_stats['über Entfernung'] += 1
         # Spielort-Text nennt einen Ort: eindeutiges Stadion mit diesem Ort bis 15 km
         if not best and place_words(p['name']):
-            cs = {s['id']: s for s in near(p['lat'], p['lon'], 2) if km(p['lat'], p['lon'], s['lat'], s['lon']) <= 15 and consistent(p['name'], s)}
+            cs = {s['id']: s for s in near(p['lat'], p['lon'], 2) if km(p['lat'], p['lon'], s['lat'], s['lon']) <= 15 and consistent(p['name'], s, strict=True)}
             if len(cs) == 1: best = next(iter(cs.values())); ep_stats['über Ortsnamen'] += 1
         if best:
             ep_href[i] = best['href']; ep_name[i] = best['name']

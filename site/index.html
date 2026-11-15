@@ -46,6 +46,7 @@ input[type=date],input[type=text],input[type=search],select{background:var(--bg)
 .row>*{flex:1;min-width:0}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{border:1px solid var(--line);background:var(--chip);border-radius:999px;padding:4px 10px;cursor:pointer;font-size:13px;user-select:none}
+.chip small{font-size:11px;opacity:.7;margin-left:3px;font-variant-numeric:tabular-nums}
 .chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .chip:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--hot);outline-offset:2px}
 .btn{border:1px solid var(--line);background:var(--chip);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:13px}
@@ -146,6 +147,11 @@ section.list{overflow:auto;border-left:1px solid var(--line);background:var(--pa
     </fieldset>
 
     <fieldset>
+      <legend>Anstoßzeit</legend>
+      <div class="chips" id="times"></div>
+    </fieldset>
+
+    <fieldset>
       <legend>Ort und Umkreis</legend>
       <input type="search" id="place" list="placelist" placeholder="Ort suchen, z. B. Cheb" aria-label="Ort suchen">
       <datalist id="placelist"></datalist>
@@ -174,7 +180,6 @@ section.list{overflow:auto;border-left:1px solid var(--line);background:var(--pa
     <fieldset>
       <legend>Ligaebene Männer</legend>
       <div class="chips" id="levels"></div>
-      <div class="row"><button class="btn" type="button" id="lvlall">Alle</button><button class="btn" type="button" id="lvllow">Nur 6. bis 10.</button></div>
     </fieldset>
 
     <fieldset>
@@ -243,7 +248,7 @@ const gen=new Date(D.generated);
 $('#meta').textContent='Saison '+D.season+' · '+D.matches.length.toLocaleString('de-DE')+' Spiele · Stand '+gen.toLocaleDateString('de-DE')+' '+gen.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
 
 // ---------- Zustand ----------
-const S={from:'',to:'',cats:new Set([0,1]),cups:true,levels:new Set([1,2,3,4,5,6,7,8,9,10,0]),kraj:-1,okres:-1,center:null,radius:25,q:'',results:false,limit:200};
+const S={from:'',to:'',cats:new Set([0,1]),cups:true,levels:new Set([1,2,3,4,5,6,7,8,9,10,0]),kraj:-1,okres:-1,center:null,radius:25,q:'',results:false,limit:200,timesOff:new Set()};
 try{ const s=JSON.parse(localStorage.getItem('fcz-filter')||'null'); if(s){ S.cats=new Set(s.cats); S.cups=s.cups; S.levels=new Set(s.levels); S.radius=s.radius||25; S.kraj=s.kraj??-1; S.okres=s.okres??-1; S.center=s.center||null; S.results=!!s.results; } }catch(e){}
 const save=()=>{ try{ localStorage.setItem('fcz-filter',JSON.stringify({cats:[...S.cats],cups:S.cups,levels:[...S.levels],radius:S.radius,kraj:S.kraj,okres:S.okres,center:S.center,results:S.results})); }catch(e){} };
 
@@ -258,7 +263,7 @@ function setQuick(q){
   document.querySelectorAll('#quick .chip').forEach(c=>c.setAttribute('aria-pressed',c.dataset.q===q));
 }
 // „bis“ darf nie vor „von“ liegen: Kalender begrenzen und beim Eintippen das andere Datum nachziehen
-function syncDates(){ $('#from').value=S.from; $('#to').value=S.to; $('#to').min=S.from||''; $('#from').max=S.to||''; }
+function syncDates(){ S.timesOff.clear(); /* neuer Zeitraum: wieder alle Anstoßzeiten */ $('#from').value=S.from; $('#to').value=S.to; $('#to').min=S.from||''; $('#from').max=S.to||''; }
 const manualDate=()=>{ document.querySelectorAll('#quick .chip').forEach(c=>c.setAttribute('aria-pressed','false')); syncDates(); render(); };
 document.querySelectorAll('#quick .chip').forEach(c=>c.onclick=()=>{setQuick(c.dataset.q);render();});
 $('#from').onchange=e=>{S.from=e.target.value; if(S.from&&S.to&&S.from>S.to) S.to=S.from; manualDate();};
@@ -268,11 +273,12 @@ $('#to').onchange=e=>{S.to=e.target.value; if(S.from&&S.to&&S.to<S.from) S.from=
 D.cats.forEach((c,i)=>{ const b=document.createElement('button'); b.type='button'; b.className='chip'; b.textContent=c; b.setAttribute('aria-pressed',S.cats.has(i)); b.onclick=()=>{ S.cats.has(i)?S.cats.delete(i):S.cats.add(i); b.setAttribute('aria-pressed',S.cats.has(i)); render(); }; $('#cats').appendChild(b); });
 $('#cups').setAttribute('aria-pressed',S.cups); $('#cups').onclick=()=>{S.cups=!S.cups; $('#cups').setAttribute('aria-pressed',S.cups); render();};
 const LV=[1,2,3,4,5,6,7,8,9,10,0];
-// 0 = Ebene nicht erkannt: bleibt im Filter (bei „Alle“ sichtbar), bekommt aber keinen eigenen Knopf
-LV.filter(l=>l).forEach(l=>{ const b=document.createElement('button'); b.type='button'; b.className='chip'; b.dataset.l=l; b.textContent=l+'.'; b.title=l+'. Liga'; b.setAttribute('aria-pressed',S.levels.has(l)); b.onclick=()=>{ S.levels.has(l)?S.levels.delete(l):S.levels.add(l); b.setAttribute('aria-pressed',S.levels.has(l)); render(); }; $('#levels').appendChild(b); });
-const syncLv=()=>document.querySelectorAll('#levels .chip').forEach(b=>b.setAttribute('aria-pressed',S.levels.has(+b.dataset.l)));
-$('#lvlall').onclick=()=>{S.levels=new Set(LV); syncLv(); render();};
-$('#lvllow').onclick=()=>{S.levels=new Set([6,7,8,9,10]); syncLv(); render();};
+// „Alle“ als erster Knopf in der Reihe; 0 = Ebene nicht erkannt: bleibt im Filter (bei „Alle“ sichtbar), ohne eigenen Knopf
+const allLv=document.createElement('button'); allLv.type='button'; allLv.className='chip'; allLv.textContent='Alle';
+allLv.onclick=()=>{ S.levels=new Set(LV); syncLv(); render(); }; $('#levels').appendChild(allLv);
+LV.filter(l=>l).forEach(l=>{ const b=document.createElement('button'); b.type='button'; b.className='chip'; b.dataset.l=l; b.textContent=l+'.'; b.title=l+'. Liga'; b.onclick=()=>{ S.levels.has(l)?S.levels.delete(l):S.levels.add(l); syncLv(); render(); }; $('#levels').appendChild(b); });
+function syncLv(){ document.querySelectorAll('#levels .chip[data-l]').forEach(b=>b.setAttribute('aria-pressed',S.levels.has(+b.dataset.l))); allLv.setAttribute('aria-pressed',LV.every(l=>S.levels.has(l))); }
+syncLv();
 
 // ---------- Region ----------
 D.kraje.forEach((k,i)=>$('#kraj').add(new Option(k,i)));
@@ -360,9 +366,22 @@ function gmLink(p){ if(!p) return ''; const u=p[5]?'https://www.google.com/maps/
 const pk=pi=>P[pi][1]+','+P[pi][2]; // Orte auf demselben Stadion teilen sich einen Kartenpunkt
 function lvlBadge(c){ return c[2]?'<span class="lvl l'+c[2]+'" title="'+c[2]+'. Liga">'+c[2]+'</span>':''; }
 
+// ---------- Anstoßzeiten: Knöpfe aus den Spielen, die alle übrigen Filter durchlassen ----------
+const tkey=m=>m[1].slice(11,16); // '' = keine Zeit angegeben
+function renderTimes(base){
+  const cnt=new Map(); for(const [m] of base){ const t=tkey(m); cnt.set(t,(cnt.get(t)||0)+1); }
+  const ts=[...cnt.keys()].sort((a,b)=>(a||'99')<(b||'99')?-1:1);
+  const box=$('#times'); box.innerHTML='';
+  if(!ts.length){ box.innerHTML='<p class="hint">Keine Spiele im gewählten Zeitraum.</p>'; return; }
+  const mk=(label,pressed,title,onclick)=>{ const b=document.createElement('button'); b.type='button'; b.className='chip'; b.innerHTML=label; b.title=title; b.setAttribute('aria-pressed',pressed); b.onclick=onclick; box.appendChild(b); };
+  mk('Alle',ts.every(t=>!S.timesOff.has(t)),'Alle Anstoßzeiten',()=>{ S.timesOff.clear(); render(); });
+  for(const t of ts) mk(esc(t||'ohne Zeit')+' <small>'+cnt.get(t)+'</small>',!S.timesOff.has(t),cnt.get(t)+' Spiele',()=>{ S.timesOff.has(t)?S.timesOff.delete(t):S.timesOff.add(t); render(); });
+}
+
 function render(fit){
   save();
-  const R=filtered();
+  const base=filtered(); renderTimes(base);
+  const R=base.filter(([m])=>!S.timesOff.has(tkey(m)));
   $('#count').textContent=R.length.toLocaleString('de-DE');
   const where=S.center?('um '+S.center.label+', '+S.radius+' km'):(S.okres>=0?'Bezirk '+D.okresy[S.okres][0]:(S.kraj>=0?D.kraje[S.kraj]:'ganz Tschechien'));
   $('#sumhint').textContent=where;
@@ -372,7 +391,7 @@ function render(fit){
   const qc=document.querySelector('#quick .chip[aria-pressed="true"]');
   const when=qc?qc.textContent:(S.from||S.to?(S.from?fd(S.from):'…')+' bis '+(S.to?fd(S.to):'…'):'alle Termine');
   const cats=S.cats.size===D.cats.length?'alle Kategorien':[...S.cats].sort().map(i=>D.cats[i].split(' ')[0]).join(', ')||'keine Kategorie';
-  $('#fsum').textContent=when+' · '+where+' · '+cats;
+  $('#fsum').textContent=when+(S.timesOff.size?' (Anstoßzeit gefiltert)':'')+' · '+where+' · '+cats;
   // Liste
   const L1=$('#list'); let h=''; let last='';
   if(!R.length) h='<p class="empty">Keine Spiele für diese Auswahl. Zeitraum verlängern, Umkreis vergrößern oder weitere Kategorien einschalten.</p>';
