@@ -12,23 +12,30 @@ try{document.documentElement.dataset.theme=localStorage.getItem('fcz-theme')==='
 <style>
 :root{
   /* Layout: Filterleiste links, Karte und Spielliste nebeneinander; am Handy Filter oben, Liste/Karte umschaltbar */
-  --bg:#f3f5f2; --panel:#ffffff; --ink:#1b2420; --muted:#5d6b64; --line:#d9e0db;
-  --accent:#1d6b4f; --accent-ink:#ffffff; --hot:#c8322b; --chip:#e7eee9;
-  --map:#eef2ee; --land:#f9fbf8;
+  /* Farben der tschechischen Flagge: Blau #11457E, Rot #D7141A, Weiß */
+  --flag-blue:#11457E; --flag-red:#D7141A;
+  --bg:#f2f5fa; --panel:#ffffff; --ink:#13213a; --muted:#5a6479; --line:#d8deea;
+  --accent:#11457E; --accent-ink:#ffffff; --hot:#D7141A; --chip:#e9eef7;
+  --map:#eef1f6; --land:#f9fafd;
   --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
   --body:"Source Sans 3","Segoe UI",system-ui,sans-serif;
   color-scheme:light;
 }
 :root[data-theme="dark"]{
-  --bg:#121715; --panel:#1a211e; --ink:#e6ece8; --muted:#97a69e; --line:#2c3632;
-  --accent:#4fb88d; --accent-ink:#0d1411; --hot:#f2443a; --chip:#24302b; --map:#16201c; --land:#1d2622; color-scheme:dark;}
+  --bg:#0a1424; --panel:#0f1d33; --ink:#e8eef8; --muted:#97a5bd; --line:#20314f;
+  --accent:#5b9be0; --accent-ink:#071222; --hot:#ff3b42; --chip:#172a4a; --map:#0c1830; --land:#12223b; color-scheme:dark;}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--ink);font:15px/1.4 var(--body);display:flex;flex-direction:column}
-header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
-header h1{font:700 26px/1 var(--display);letter-spacing:.3px;margin:0;text-wrap:balance}
-header .meta{color:var(--muted);font-size:13px}
-#theme{margin-left:auto;align-self:center}
+/* Kopf in Flaggenblau, darunter ein weiß-roter Streifen wie die Flagge */
+header{position:relative;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px 16px;background:var(--flag-blue);color:#fff}
+header::after{content:"";position:absolute;left:0;right:0;bottom:0;height:6px;background:linear-gradient(#fff 0 50%,var(--flag-red) 50% 100%)}
+header h1{display:flex;align-items:center;gap:10px;font:700 28px/1 var(--display);letter-spacing:.4px;margin:0;text-wrap:balance}
+header h1 svg{flex:none;width:30px;height:20px;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,.6)}
+header .meta{color:rgba(255,255,255,.78);font-size:13px}
+#logout{color:rgba(255,255,255,.78)!important}
+#theme{margin-left:auto;align-self:center;background:transparent;color:#fff;border-color:rgba(255,255,255,.55)}
+#theme:hover{background:rgba(255,255,255,.12)}
 /* Kartenkacheln im Dunkelmodus abdunkeln */
 :root[data-theme="dark"] .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9)}
 .cnt{display:flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--hot);border:1px solid #fff;color:#fff;font:700 11px/1 var(--body);font-variant-numeric:tabular-nums;box-sizing:border-box}
@@ -38,7 +45,8 @@ header .meta{color:var(--muted);font-size:13px}
 .app{flex:1;display:grid;grid-template-columns:300px 1fr 430px;min-height:0}
 aside{overflow:auto;padding:12px 16px 24px;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;gap:16px}
 fieldset{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
-legend{font:700 15px/1 var(--display);text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:8px}
+legend{display:flex;align-items:center;gap:7px;font:700 15px/1 var(--display);text-transform:uppercase;letter-spacing:.6px;color:var(--accent);margin-bottom:8px}
+legend::before{content:"";width:4px;height:13px;border-radius:1px;background:var(--hot)}
 label.f{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--muted)}
 input,select,button{font:inherit;color:var(--ink)}
 input[type=date],input[type=text],input[type=search],select{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;width:100%}
@@ -61,7 +69,7 @@ input[type=date],input[type=text],input[type=search],select{background:var(--bg)
 section.list{overflow:auto;border-left:1px solid var(--line);background:var(--panel);min-height:0}
 .summary{position:sticky;top:0;z-index:2;background:var(--panel);padding:10px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .summary strong{font:700 22px/1 var(--display);font-variant-numeric:tabular-nums}
-.day{padding:8px 16px 4px;font:700 17px/1.1 var(--display);text-transform:uppercase;letter-spacing:.5px;background:var(--bg);border-bottom:1px solid var(--line);position:sticky;top:45px;z-index:1}
+.day{padding:8px 16px 4px;font:700 17px/1.1 var(--display);color:var(--accent);text-transform:uppercase;letter-spacing:.5px;background:var(--bg);border-bottom:1px solid var(--line);position:sticky;top:45px;z-index:1}
 .m{display:grid;grid-template-columns:44px 1fr auto;gap:2px 10px;padding:8px 16px;border-bottom:1px solid var(--line);cursor:pointer}
 .m:hover{background:var(--bg)}
 .m .t{font-variant-numeric:tabular-nums;font-weight:700}
@@ -97,7 +105,9 @@ section.list{overflow:auto;border-left:1px solid var(--line);background:var(--pa
 }
 #gate{position:fixed;inset:0;z-index:1000;background:var(--bg);display:none;align-items:center;justify-content:center;padding:16px}
 #gate form{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:24px;width:100%;max-width:360px;display:flex;flex-direction:column;gap:12px}
-#gate h2{font:700 26px/1 var(--display);margin:0}
+#gate h2{display:flex;align-items:center;gap:10px;font:700 26px/1 var(--display);margin:0;color:var(--accent)}
+#gate h2 svg{width:30px;height:20px;border-radius:2px;box-shadow:0 0 0 1px var(--line)}
+#gate form{border-top:6px solid var(--flag-blue)}
 #gate input[type=password]{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%;font:inherit;color:var(--ink)}
 #gate .err{color:var(--hot);font-size:13px;min-height:1em;margin:0}
 #logout{background:none;border:0;color:var(--muted);text-decoration:underline;cursor:pointer;font-size:13px;padding:0}
@@ -107,7 +117,7 @@ section.list{overflow:auto;border-left:1px solid var(--line);background:var(--pa
 <body data-view="list">
 <div id="gate" role="dialog" aria-modal="true" aria-labelledby="gate-title">
   <form id="gateform" autocomplete="on">
-    <h2 id="gate-title">Klobása-Planer</h2>
+    <h2 id="gate-title" class="gate-title"><svg viewBox="0 0 900 600" aria-hidden="true"><rect width="900" height="300" fill="#fff"/><rect y="300" width="900" height="300" fill="#D7141A"/><path d="M0 0 450 300 0 600z" fill="#11457E"/></svg>Klobása-Planer</h2>
     <p class="hint">Die Spieldaten sind verschlüsselt. Bitte Passwort eingeben.</p>
     <input type="text" name="username" value="spielfinder" autocomplete="username" hidden>
     <label class="f" for="pw">Passwort<input type="password" id="pw" autocomplete="current-password" required></label>
@@ -117,7 +127,7 @@ section.list{overflow:auto;border-left:1px solid var(--line);background:var(--pa
   </form>
 </div>
 <header>
-  <h1>Klobása-Planer</h1>
+  <h1><svg viewBox="0 0 900 600" aria-hidden="true"><rect width="900" height="300" fill="#fff"/><rect y="300" width="900" height="300" fill="#D7141A"/><path d="M0 0 450 300 0 600z" fill="#11457E"/></svg>Klobása-Planer</h1>
   <span class="meta" id="meta">Lade Spielpläne …</span>
   <button type="button" id="logout" hidden>Passwort auf diesem Gerät vergessen</button>
   <button type="button" class="btn" id="theme"></button>
