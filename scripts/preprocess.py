@@ -322,6 +322,92 @@ if os.path.exists(EP_PATH):
     ep_stats['ohne'] = sum(1 for h in ep_href if not h)
     print('Europlan:', len(EP), 'Stadien;', dict(ep_stats))
 
+# ---------- OpenStreetMap (data/osm.json, erzeugt von scripts/osm.py) ----------
+# Spielorte ohne Europlan-Stadion: Kartenpunkt auf den echten Fußballplatz statt auf den Vereinssitz.
+# Nennt der Spielort-Text einen Ort, wird dieser gesucht (bis 25 km vom Verein) und der nächste Platz dort genommen,
+# sonst der nächste Platz am Vereinssitz (bis 2 km). Findet sich kein Platz, wenigstens die Ortsmitte.
+OSM_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'osm.json')
+osm_flag = [0] * len(place_list)  # 1 = OSM-Platz, 2 = OSM-Ortsmitte
+if os.path.exists(OSM_PATH):
+    O = json.load(open(OSM_PATH, encoding='utf-8'))
+    o_stats = Counter()
+    OSTOP = {'trava', 'umt', 'ut', 'uo', 'umela', 'umelka', 'hriste', 'stadion', 'stadiony', 'areal', 'sportovni', 'fotbalove',
+             'fotbalovy', 'mestsky', 'mestske', 'tj', 'sk', 'fk', 'fc', 'afk', 'sokol', 'nad', 'pod', 'ul', 'ulice', 'nam',
+             'namesti', 'skola', 'zs', 'muzi', 'dorost', 'zaci', 'zeny', 'hlavni', 'treninkove', 'treninkova', 'pristavek'}
+    O_ART = re.compile(r'\b(umt|ut|umela|umelka|umt\d?|3g)\b')
+    def owords(v): return [w for w in norm(v).split() if len(w) > 2 and w not in OSTOP and not w.isdigit()]
+    def osame(a, b): return a == b or (len(a) >= 5 and len(b) >= 5 and a[:5] == b[:5])
+    pgrid = defaultdict(list)
+    for la, lo, nm, art in O['pitches']:
+        pgrid[(round(la, 1), round(lo, 1))].append((la, lo, nm, art))
+    def pitches_near(lat, lon, rad):
+        out = []
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                for q in pgrid.get((round(lat + dy / 10, 1), round(lon + dx / 10, 1)), []):
+                    d = km(lat, lon, q[0], q[1])
+                    if d <= rad: out.append((d, q))
+        return sorted(out, key=lambda x: x[0])
+    pidx = defaultdict(list)
+    for nm, la, lo, typ in O['places']:
+        if typ == 'city': continue  # Großstädte sind für die Platzsuche zu groß (Praha 6, Juliska ≠ Innenstadt)
+        ws = norm(nm).split()
+        for w in set(ws):
+            if len(w) > 2: pidx[w[:3]].append((ws, la, lo, typ))
+    # Wort aus dem Spielort darf eine Abkürzung des Ortsnamens sein („Mor.“), aber nicht länger:
+    # sonst würden Straßen wie „Sokolova“ oder „Kučerova“ zu Sokolov bzw. Kučerov
+    def oabbr(a, b): return b.startswith(a)
+    # Vereinsnamen-Wörter, die keine Orte sind
+    CLUBW = {'slavia', 'sparta', 'spartak', 'banik', 'dynamo', 'viktoria', 'viktorie', 'lokomotiva', 'loko', 'tatran', 'jiskra',
+             'slovan', 'meteor', 'union', 'olympia', 'sokol', 'orel', 'start', 'admira', 'bohemians', 'junior', 'juniorka',
+             'zbrojovka', 'slavoj', 'cechie', 'hvezda', 'rapid', 'unie', 'agro', 'fotbal', 'football', 'club', 'klub', 'mladez',
+             'praha', 'brno', 'ostrava', 'plzen', 'liberec', 'olomouc'}
+    TYPRANK = {'town': 0, 'village': 1, 'suburb': 2, 'quarter': 2, 'hamlet': 3, 'neighbourhood': 3, 'locality': 4, 'isolated_dwelling': 5}
+    def find_town(vt, lat, lon, maxd=12, initials=()):
+        """Ort aus Wörtern: meiste passende Wörter, dann Entfernung (+3 km je zusätzliches Namenswort)."""
+        best = None
+        for w in vt:
+            for ws, la, lo, typ in pidx.get(w[:3], []):
+                d = km(lat, lon, la, lo)
+                if d > maxd: continue
+                # Abkürzungen wie „v O.h.“ oder „n.O.“ zählen als Anfangsbuchstaben (Deštné v Orlických horách)
+                hit = sum(1 for a in list(vt) + list(initials) if any(oabbr(a, b) for b in ws))
+                if not any(oabbr(w, b) for b in ws): continue
+                extra = max(0, len(ws) - hit)
+                # landesweit (falscher Vereinssitz möglich): exakter Name und größerer Ort vor Nähe
+                # (Příbram, nicht Příbram na Moravě); in der Nähe: Entfernung, +3 km je zusätzliches Namenswort
+                key = (-hit, extra, TYPRANK.get(typ, 9), d) if maxd > 12 else (-hit, d + 3 * extra)
+                if best is None or key < best[0]: best = (key, la, lo)
+        return (best[1], best[2]) if best else None
+    for i, p in enumerate(place_list):
+        if ep_href[i]: continue
+        vt = owords(p['name'])
+        tw = [w for w in owords(p['home'].most_common(1)[0][0]) if w not in CLUBW] if p['home'] else []
+        center, rad = (p['lat'], p['lon']), 2.0
+        # Der Vereinssitz aus fotbal.cz ist manchmal falsch (z. B. Liptaň in Ostrava). Nennt der Spielort denselben Ort
+        # wie der Vereinsname oder gar keinen, wird der Ort aus dem Vereinsnamen landesweit gesucht.
+        # Zuerst immer in der Nähe des Vereinssitzes suchen, landesweit nur, wenn dort nichts passt.
+        words = vt or tw
+        ini = [w for w in norm(p['name'] if vt else p['home'].most_common(1)[0][0]).split() if len(w) == 1 and w.isalpha()]
+        town = find_town(words, p['lat'], p['lon'], initials=ini) if words else None
+        if not town and words and (not vt or any(oabbr(a, b) or oabbr(b, a) for a in vt for b in tw)):
+            town = find_town(words, p['lat'], p['lon'], 300, ini)
+        if town: center, rad = town, 1.5
+        cs = pitches_near(center[0], center[1], rad)
+        if cs:
+            if O_ART.search(norm(p['name'])):  # „UMT“: Kunstrasenplatz bevorzugen, wenn OSM einen kennt
+                art = [c for c in cs if c[1][3]]
+                if art: cs = art
+            q = cs[0][1]
+            p['lat'], p['lon'] = q[0], q[1]; ep_name[i] = q[2]; osm_flag[i] = 1
+            o_stats['Platz über Ortsname' if town else 'Platz am Vereinssitz'] += 1
+        elif town:
+            p['lat'], p['lon'] = town; osm_flag[i] = 2; o_stats['nur Ortsmitte'] += 1
+        else:
+            o_stats['unverändert'] += 1; continue
+        p['ok'], p['kr'] = locate(p['lat'], p['lon'], OK), locate(p['lat'], p['lon'], KR)
+    print('OpenStreetMap:', len(O['pitches']), 'Plätze;', dict(o_stats))
+
 # Polygone benennen: Mehrheit der Wettbewerbs-Verbände, deren Heimspiele darin liegen
 ok_votes = defaultdict(Counter); kr_votes = defaultdict(Counter)
 for m, pi in zip(matches, match_place):
@@ -367,7 +453,7 @@ for i, p in enumerate(place_list):
     P.append([p['name'], round(p['lat'], 5), round(p['lon'], 5),
               OKRESY.index(okres_names[p['ok']]) if p['ok'] in okres_names else -1,
               KRAJE.index(kraj_names[p['kr']]) if p['kr'] in kraj_names else -1,
-              ep_href[i], ep_name[i]])
+              ep_href[i], ep_name[i], osm_flag[i]])
 
 out = {
     'generated': R['generated'], 'season': R.get('season', ''),

@@ -371,8 +371,10 @@ function epUrl(team){ return 'https://www.europlan-online.de/index.php?s=search&
 function epLink(p,team){ return p&&p[5]?'<a href="https://www.europlan-online.de/'+esc(p[5])+'" target="_blank" rel="noopener">Europlan</a>':'<a href="'+epUrl(team)+'" target="_blank" rel="noopener" title="Kein Stadion zugeordnet, öffnet die Suche">Europlan-Suche</a>'; }
 // Google Maps: mit zugeordnetem Stadion dessen Namen an genau dieser Stelle suchen (öffnet meist den Eintrag),
 // sonst Fußballplätze rund um den Vereinssitz
-function gmLink(p){ if(!p) return ''; const u=p[5]?'https://www.google.com/maps/search/'+encodeURIComponent(p[6]||p[0])+'/@'+p[1]+','+p[2]+',17z':'https://www.google.com/maps/search/'+encodeURIComponent('fotbalové hřiště')+'/@'+p[1]+','+p[2]+',14z';
-  return '<a href="'+u+'" target="_blank" rel="noopener"'+(p[5]?'':' title="Kein Stadion zugeordnet, zeigt Fußballplätze in der Nähe"')+'>Google Maps</a>'; }
+// p[7]: 1 = Platz aus OpenStreetMap (genaue Position), 2 = nur Ortsmitte aus OpenStreetMap
+function gmLink(p){ if(!p) return ''; const exact=p[5]||p[7]===1;
+  const u='https://www.google.com/maps/search/'+encodeURIComponent(exact?(p[6]||'fotbalové hřiště'):'fotbalové hřiště')+'/@'+p[1]+','+p[2]+','+(exact?17:14)+'z';
+  return '<a href="'+u+'" target="_blank" rel="noopener"'+(exact?'':' title="Platz nicht genau bekannt, zeigt Fußballplätze in der Nähe"')+'>Google Maps</a>'; }
 const pk=pi=>P[pi][1]+','+P[pi][2]; // Orte auf demselben Stadion teilen sich einen Kartenpunkt
 function lvlBadge(c){ return c[2]?'<span class="lvl l'+c[2]+'" title="'+c[2]+'. Liga">'+c[2]+'</span>':''; }
 
