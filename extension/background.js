@@ -1,32 +1,34 @@
 // Fotbal CZ Spielfinder Updater
-// Öffnet einmal pro Woche fotbal.cz in einem Hintergrund-Tab, liest dort alle Spielpläne aus
+// Öffnet zweimal pro Woche fotbal.cz in einem Hintergrund-Tab, liest dort alle Spielpläne aus
 // (wie ein normaler Seitenbesuch, nur automatisch) und lädt die Rohdaten ins GitHub-Repo.
 importScripts('crawl.js');
 
 const START_URL = 'https://www.fotbal.cz/souteze/subjekty/';
-const WEEKDAY = 1; // Wochentag des Abrufs: 0 = Sonntag, 1 = Montag, … 6 = Samstag
-const HOUR = 6;    // Uhrzeit (lokal)
-const WEEK = 7 * 24 * 60; // Minuten
+const WEEKDAYS = [1, 4]; // Wochentage des Abrufs: 0 = Sonntag, 1 = Montag, … 4 = Donnerstag, 6 = Samstag
+const HOUR = 6;          // Uhrzeit (lokal)
+const MAX_GAP = 4 * 24 * 60; // längster Abstand zwischen zwei Terminen in Minuten (Do → Mo)
 const MAX_RUN = 6 * 3600e3; // ein Lauf darf (mit Captcha-Pause) bis zu 6 Stunden dauern
 
 function nextRun() {
   const d = new Date(); d.setHours(HOUR, 0, 0, 0);
-  while (d.getDay() !== WEEKDAY || d <= new Date()) d.setDate(d.getDate() + 1);
+  while (!WEEKDAYS.includes(d.getDay()) || d <= new Date()) d.setDate(d.getDate() + 1);
   return d.getTime();
 }
-const schedule = () => chrome.alarms.create('weekly', { when: nextRun(), periodInMinutes: WEEK });
+// Ein Einmal-Alarm auf den nächsten Termin; nach jedem Auslösen wird der folgende gesetzt
+const schedule = () => chrome.alarms.create('scheduled', { when: nextRun() });
 
 chrome.runtime.onInstalled.addListener(async () => {
-  await chrome.alarms.clear('daily'); // alter Tages-Alarm aus Version 1.0
+  await chrome.alarms.clear('daily');  // alter Tages-Alarm aus Version 1.0
+  await chrome.alarms.clear('weekly'); // alter Wochen-Alarm bis Version 1.2
   schedule();
 });
 chrome.runtime.onStartup.addListener(async () => {
-  if (!(await chrome.alarms.get('weekly'))) schedule();
-  // Verpassten Lauf nachholen, wenn der letzte Erfolg älter als eine Woche (plus Puffer) ist
+  if (!(await chrome.alarms.get('scheduled'))) schedule();
+  // Verpassten Lauf nachholen, wenn der letzte Erfolg länger zurückliegt als der größte Abstand (plus Puffer)
   const { lastOk } = await chrome.storage.local.get('lastOk');
-  if (!lastOk || Date.now() - lastOk > (WEEK + 120) * 60e3) setTimeout(run, 60e3);
+  if (!lastOk || Date.now() - lastOk > (MAX_GAP + 120) * 60e3) setTimeout(run, 60e3);
 });
-chrome.alarms.onAlarm.addListener(a => { if (a.name === 'weekly') run(); });
+chrome.alarms.onAlarm.addListener(a => { if (a.name === 'scheduled') { schedule(); run(); } });
 chrome.action.onClicked.addListener(() => run());
 chrome.runtime.onMessage.addListener((msg, sender) => {
   if (msg && msg.type === 'fcz-progress') setStatus(msg.text);
