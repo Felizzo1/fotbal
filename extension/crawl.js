@@ -8,8 +8,11 @@ function crawlFotbalCz(cfg) {
   const CAPTCHA_WAIT = 3 * 3600e3; // so lange wird auf das Lösen einer Prüfung gewartet
   // Zwischenspeicher: Vereine und Wettbewerbsliste ändern sich selten, abgeschlossene Wettbewerbe gar nicht mehr.
   const CLUBS_MAX_AGE = 28 * 86400e3;  // Vereinskarte höchstens alle 4 Wochen neu laden
-  const INDEX_MAX_AGE = 28 * 86400e3;  // Verbände und Wettbewerbsliste höchstens alle 4 Wochen
-  const FINISHED_MARGIN = 3 * 86400e3; // Wettbewerb gilt als fertig, wenn beim letzten Laden alle Spiele 3 Tage vorbei waren
+  const INDEX_MAX_AGE = 7 * 86400e3;   // Verbände und Wettbewerbsliste wöchentlich (neue Pokalrunden erscheinen als neue Wettbewerbe)
+  // Wann ein Wettbewerb neu geladen wird (Ziel: nur das Nötige abrufen):
+  const SOON = 21 * 86400e3;           // nächstes Spiel binnen 3 Wochen: bei jedem Lauf
+  const LATER_MAX_AGE = 14 * 86400e3;  // nächstes Spiel später: alle 2 Wochen
+  const DONE_MAX_AGE = 30 * 86400e3;   // kein Spiel mehr offen: einmal im Monat (falls Termine nachgetragen werden)
   const progress = text => { try { chrome.runtime.sendMessage({ type: 'fcz-progress', text }); } catch (e) {} };
   const done = (ok, text) => { try { chrome.runtime.sendMessage({ type: 'fcz-done', ok, text }); } catch (e) {} };
 
@@ -127,17 +130,36 @@ function crawlFotbalCz(cfg) {
       if (comps.length < 500) throw new Error('Nur ' + comps.length + ' Wettbewerbe gefunden');
       cache.index = { at: t0, subjects, comps, rk }; await save();
     }
-    const { subjects, comps, rk } = cache.index;
+    // Nur Männer und Frauen abrufen: Jugend, Futsal und Alte Herren zeigt die Seite nicht an.
+    // Gleiche Regeln wie classify() in scripts/preprocess.py (Name und erster Buchstabe des Wettbewerbscodes).
+    const isAdult = (name, code) => {
+      const n = (name || '').toLowerCase(), k = (code || '').charAt(0);
+      if (/futsal|malá kopaná|veterán|old ?boys|stará garda|gentleman|u-?40|\+3[05]/.test(n)) return false;
+      if (/přípravk|přípravek|bambin|minižá|\d-\d+ let/.test(n) || /(^|[^a-z0-9])u ?([6-9]|1[01])(?![0-9])/.test(n) || (k && 'GHŘ'.includes(k))) return false;
+      if (/žák|žačk/.test(n) || /(^|[^a-z0-9])u ?1[2-5](?![0-9])/.test(n) || (k && 'EFŇŠ'.includes(k))) return false;
+      if (/doros|junior/.test(n) || /(^|[^a-z0-9])u ?1[6-9](?![0-9])/.test(n) || (k && 'CDL'.includes(k))) return false;
+      return true;
+    };
+    // Řídící komise: Name und Code erst nach dem ersten Laden bekannt (aus der Überschrift)
+    const rkInfo = id => { const e = cache.comps[id]; const tm = e && e.title.match(/›\s*\d{4}\s+(\S+)\s+-\s+(.*)$/); return tm ? { code: tm[1], name: tm[2] } : null; };
+    const { subjects } = cache.index;
+    const comps = cache.index.comps.filter(c => isAdult(c.name, c.code));
+    const rk = cache.index.rk.filter(c => { const i = rkInfo(c.id); return !i || isAdult(i.name, i.code); });
+    // Zwischenspeicher von Jugendwettbewerben früherer Läufe aufräumen
+    const keepIds = new Set([...comps, ...rk].map(c => c.id));
+    for (const id of Object.keys(cache.comps)) if (!keepIds.has(id)) delete cache.comps[id];
 
-    // 4. Spiele. Ein Wettbewerb wird neu geladen, außer beim letzten Laden waren alle Spiele schon vorbei
-    // (dann ändern sich Datum, Zeit und Ort nicht mehr). Fortschritt wird laufend gespeichert,
-    // damit ein abgebrochener Lauf beim nächsten Mal nicht von vorn beginnt.
+    // 4. Spiele. Neu geladen wird je nach nächstem Spieltermin (siehe SOON, LATER_MAX_AGE, DONE_MAX_AGE oben).
+    // Fortschritt wird laufend gespeichert, damit ein abgebrochener Lauf beim nächsten Mal nicht von vorn beginnt.
     const fresh = id => {
       const c = cache.comps[id]; if (!c) return false;
       if (!c.matches.length) return false; // leere Ergebnisse nie übernehmen (könnten von einer Prüfseite stammen)
       if (c.runStart === t0 || c.runStart === cache.runStart) return true; // in diesem bzw. dem abgebrochenen Lauf schon geladen
-      const lastMatch = Math.max(...c.matches.map(m => m.dt ? Date.parse(m.dt) : Infinity));
-      return lastMatch + FINISHED_MARGIN < c.at;
+      const now = Date.now(), age = now - c.at;
+      const upcoming = c.matches.map(m => m.dt ? Date.parse(m.dt) : Infinity).filter(t => t >= now - 86400e3);
+      if (!upcoming.length) return age < DONE_MAX_AGE;           // nichts mehr offen
+      if (Math.min(...upcoming) - now > SOON) return age < LATER_MAX_AGE; // nächstes Spiel erst in über 3 Wochen
+      return false;                                              // Spiele in den nächsten 3 Wochen: immer neu
     };
     if (!cache.runStart || cache.runDone || t0 - cache.runStart > 2 * 86400e3) { cache.runStart = t0; cache.runDone = false; }
     let diag = null;
