@@ -10,7 +10,7 @@ function crawlFotbalCz(cfg) {
   const CLUBS_MAX_AGE = 28 * 86400e3;  // Vereinskarte höchstens alle 4 Wochen neu laden
   const INDEX_MAX_AGE = 7 * 86400e3;   // Verbände und Wettbewerbsliste wöchentlich (neue Pokalrunden erscheinen als neue Wettbewerbe)
   // Wann ein Wettbewerb neu geladen wird (Ziel: nur das Nötige abrufen):
-  const SOON = 21 * 86400e3;           // nächstes Spiel binnen 3 Wochen: bei jedem Lauf
+  const SOON = 42 * 86400e3;           // nächstes Spiel binnen 6 Wochen: bei jedem Lauf
   const LATER_MAX_AGE = 14 * 86400e3;  // nächstes Spiel später: alle 2 Wochen
   const DONE_MAX_AGE = 30 * 86400e3;   // kein Spiel mehr offen: einmal im Monat (falls Termine nachgetragen werden)
   const progress = text => { try { chrome.runtime.sendMessage({ type: 'fcz-progress', text }); } catch (e) {} };
@@ -158,8 +158,8 @@ function crawlFotbalCz(cfg) {
       const now = Date.now(), age = now - c.at;
       const upcoming = c.matches.map(m => m.dt ? Date.parse(m.dt) : Infinity).filter(t => t >= now - 86400e3);
       if (!upcoming.length) return age < DONE_MAX_AGE;           // nichts mehr offen
-      if (Math.min(...upcoming) - now > SOON) return age < LATER_MAX_AGE; // nächstes Spiel erst in über 3 Wochen
-      return false;                                              // Spiele in den nächsten 3 Wochen: immer neu
+      if (Math.min(...upcoming) - now > SOON) return age < LATER_MAX_AGE; // nächstes Spiel erst in über 6 Wochen
+      return false;                                              // Spiele in den nächsten 6 Wochen: immer neu
     };
     if (!cache.runStart || cache.runDone || t0 - cache.runStart > 2 * 86400e3) { cache.runStart = t0; cache.runDone = false; }
     let diag = null;

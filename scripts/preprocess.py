@@ -327,7 +327,7 @@ if os.path.exists(EP_PATH):
 # Nennt der Spielort-Text einen Ort, wird dieser gesucht (bis 25 km vom Verein) und der nächste Platz dort genommen,
 # sonst der nächste Platz am Vereinssitz (bis 2 km). Findet sich kein Platz, wenigstens die Ortsmitte.
 OSM_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'osm.json')
-osm_flag = [0] * len(place_list)  # 1 = OSM-Platz, 2 = OSM-Ortsmitte
+osm_flag = [0] * len(place_list)  # 1 = OSM-Platz am genannten Ort, 2 = nur OSM-Ortsmitte, 3 = nächster OSM-Platz am Vereinssitz (geschätzt)
 if os.path.exists(OSM_PATH):
     O = json.load(open(OSM_PATH, encoding='utf-8'))
     o_stats = Counter()
@@ -399,7 +399,7 @@ if os.path.exists(OSM_PATH):
                 art = [c for c in cs if c[1][3]]
                 if art: cs = art
             q = cs[0][1]
-            p['lat'], p['lon'] = q[0], q[1]; ep_name[i] = q[2]; osm_flag[i] = 1
+            p['lat'], p['lon'] = q[0], q[1]; ep_name[i] = q[2]; osm_flag[i] = 1 if town else 3
             o_stats['Platz über Ortsname' if town else 'Platz am Vereinssitz'] += 1
         elif town:
             p['lat'], p['lon'] = town; osm_flag[i] = 2; o_stats['nur Ortsmitte'] += 1
