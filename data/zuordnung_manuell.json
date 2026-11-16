@@ -1,6 +1,17 @@
 {
   "_hinweis": "Von Hand geklärte Spielorte. Hat Vorrang vor der automatischen Zuordnung in scripts/preprocess.py. spielort = Spielort-Text von fotbal.cz (genau), verein = Heimverein (optional, genau wie bei fotbal.cz), dann entweder europlan = Stadion-ID (Zahl aus …/stadion-1234.html) oder lat/lon (z. B. aus Google Maps). Mit \"weglassen\": true bleibt der Ort als unsicher markiert.",
   "eintraege": [
-    {"spielort": "Bažantnice-tráva", "verein": "Karviná B", "europlan": 8951, "notiz": "Fotbalový areál Bažantnice (MFK Karviná diverse), bestätigt 16.11.2026"}
+    {"spielort": "Bažantnice-tráva", "verein": "Karviná B", "europlan": 8951, "notiz": "Fotbalový areál Bažantnice (MFK Karviná diverse), bestätigt 16.11.2026"},
+    {"spielort": "Na Litavce, Příbram", "europlan": 3334, "notiz": "Stadion Na Litavce; Vereinssitz bei fotbal.cz falsch (Brno)"},
+    {"spielort": "Bedřichov, Sokolovská-tráva", "europlan": 32021, "notiz": "Hřiště Sokol Bedřichov"},
+    {"spielort": "Brankovická - tráva", "verein": "SK Sparta Kolín", "europlan": 3402, "notiz": "Městský stadion Kolín (Brankovická ulice)"},
+    {"spielort": "Bzenec-tráva", "europlan": 20551, "notiz": "Fotbalový stadion Bzenec"},
+    {"spielort": "Břeclav, Lesní 10", "europlan": 32041, "notiz": "Fotbalový areál Slovan (MSK Břeclav)"},
+    {"spielort": "SA Soukeník / tráva", "europlan": 73674, "notiz": "Tréninkové centrum Soukeník (FC Silon Táborsko)"},
+    {"spielort": "Holice, Staškova 28", "verein": "1. HFK Olomouc", "europlan": 3370, "notiz": "Stadion 1. HFK Olomouc (Olomouc-Holice)"},
+    {"spielort": "UMTRA ,Holice", "verein": "1. HFK Olomouc", "europlan": 3370, "notiz": "Stadion 1. HFK Olomouc (Olomouc-Holice)"},
+    {"spielort": "Neštěmice", "verein": "FK ČL Neštěmice", "europlan": 7079, "notiz": "Stadion Český Lev"},
+    {"spielort": "SK Český Brod (ul. Sokolská 895)", "europlan": 8944, "notiz": "Na Kutilce"},
+    {"spielort": "Slavia HK, UMT", "europlan": 104145, "notiz": "Hřiště 3 TJ Slavia Hradec Králové (Kunstrasen)"}
   ]
 }
