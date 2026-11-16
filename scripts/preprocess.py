@@ -22,7 +22,7 @@ for c in R['comps']:
 for m in R['matches']:
     ci, rnd, h, g, score, dt, v, spec, mid = m
     th, tg = R['teams'][h], R['teams'][g]
-    matches.append((ci, rnd, th[0], th[1], tg[0], tg[1], score, dt, R['venues'][v] if v >= 0 else '', spec))
+    matches.append((ci, rnd, th[0], th[1], tg[0], tg[1], score, dt, R['venues'][v] if v >= 0 else '', spec, mid))
 extra = R.get('extra') or {}
 off = len(comps)
 for c in extra.get('comps', []):
@@ -30,7 +30,7 @@ for c in extra.get('comps', []):
     comps.append({'id': c['id'], 'code': c.get('code') or '', 'name': name, 'subj': c['subj']})
 for m in extra.get('matches', []):
     ci, rnd, hn, hc, an, ac, score, dt, venue, spec, mid = m
-    matches.append((ci + off, rnd, hn, hc, an, ac, score, dt, venue, spec))
+    matches.append((ci + off, rnd, hn, hc, an, ac, score, dt, venue, spec, mid))
 
 # ---------- Kategorie und Ligaebene ----------
 # Auf der Seite nur Männer und Frauen; Jugend, Futsal und Alte Herren werden unten aussortiert
@@ -144,7 +144,7 @@ places = {}   # (venueName, lat, lon) -> idx
 place_list = []
 match_place = []
 for m in matches:
-    ci, rnd, hn, hc, an, ac, score, dt, venue, spec = m
+    ci, rnd, hn, hc, an, ac, score, dt, venue, spec, mid = m
     xy = coords_for(venue, hc)
     if not xy:
         match_place.append(-1); continue
@@ -327,7 +327,7 @@ if os.path.exists(EP_PATH):
 # Nennt der Spielort-Text einen Ort, wird dieser gesucht (bis 25 km vom Verein) und der nächste Platz dort genommen,
 # sonst der nächste Platz am Vereinssitz (bis 2 km). Findet sich kein Platz, wenigstens die Ortsmitte.
 OSM_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'osm.json')
-osm_flag = [0] * len(place_list)  # 1 = OSM-Platz am genannten Ort, 2 = nur OSM-Ortsmitte, 3 = nächster OSM-Platz am Vereinssitz (geschätzt)
+osm_flag = [0] * len(place_list)  # 1 = OSM-Platz am genannten Ort, 2 = nur OSM-Ortsmitte, 3 = OSM-Platz geschätzt (mehrere möglich oder nur Vereinssitz)
 if os.path.exists(OSM_PATH):
     O = json.load(open(OSM_PATH, encoding='utf-8'))
     o_stats = Counter()
@@ -394,12 +394,14 @@ if os.path.exists(OSM_PATH):
             town = find_town(words, p['lat'], p['lon'], 300, ini)
         if town: center, rad = town, 1.5
         cs = pitches_near(center[0], center[1], rad)
+        n_cands = len(cs)
         if cs:
             if O_ART.search(norm(p['name'])):  # „UMT“: Kunstrasenplatz bevorzugen, wenn OSM einen kennt
                 art = [c for c in cs if c[1][3]]
                 if art: cs = art
             q = cs[0][1]
-            p['lat'], p['lon'] = q[0], q[1]; ep_name[i] = q[2]; osm_flag[i] = 1 if town else 3
+            # sicher nur, wenn am genannten Ort höchstens zwei Plätze infrage kommen (in Städten wie Děčín gibt es viele)
+            p['lat'], p['lon'] = q[0], q[1]; ep_name[i] = q[2]; osm_flag[i] = 1 if town and n_cands <= 2 else 3
             o_stats['Platz über Ortsname' if town else 'Platz am Vereinssitz'] += 1
         elif town:
             p['lat'], p['lon'] = town; osm_flag[i] = 2; o_stats['nur Ortsmitte'] += 1
@@ -443,9 +445,9 @@ def ti(n):
 
 M = []
 for m, pi in zip(matches, match_place):
-    ci, rnd, hn, hc, an, ac, score, dt, venue, spec = m
+    ci, rnd, hn, hc, an, ac, score, dt, venue, spec, mid = m
     if not dt: continue
-    M.append([ci, dt, ti(hn), ti(an), score, pi, rnd or 0, spec if spec is not None else -1])
+    M.append([ci, dt, ti(hn), ti(an), score, pi, rnd or 0, spec if spec is not None else -1, (mid or '').replace('-', '')])
 M.sort(key=lambda r: r[1])
 
 P = []
@@ -461,7 +463,7 @@ out = {
     'okresy': [[o, KRAJE.index(okres_kraj[o].most_common(1)[0][0]) if okres_kraj[o] else -1] for o in OKRESY],
     'okresPoly': {str(k): OKRESY.index(v) for k, v in okres_names.items()},
     'comps': comp_out, 'places': P, 'teams': teams,
-    'matchFields': ['comp', 'datetime', 'home', 'away', 'score', 'place', 'round', 'spectators'],
+    'matchFields': ['comp', 'datetime', 'home', 'away', 'score', 'place', 'round', 'spectators', 'matchId (fotbal.cz, ohne Bindestriche)'],
     'matches': M,
 }
 with open(out_path, 'w', encoding='utf-8') as f:
