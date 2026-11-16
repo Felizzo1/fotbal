@@ -243,6 +243,12 @@ if os.path.exists(EP_PATH):
         k = club_key(team)
         if (k, variants) in _club_cache: return _club_cache[(k, variants)]
         res = list(ep_by_club.get(k, []))
+        if not res and k:  # Kürzel: „Slezský fotbalový club Opava“ = „SFC Opava“
+            ws = norm(re.sub(r',.*$', '', team)).split()
+            for n in (2, 3, 4):
+                if len(ws) > n:
+                    res = list(ep_by_club.get(club_key(''.join(w[0] for w in ws[:n]) + ' ' + ' '.join(ws[n:])), []))
+                    if res: break
         if variants and k:  # im Spielort genannter Ort/Verein: alle passenden Vereine, die Entfernung entscheidet später
             cand = set().union(*(club_keys_by_tok.get(w[:4], set()) for w in k.split() if len(w) >= 4)) if any(len(w) >= 4 for w in k.split()) else set()
             fwd = [c for c in cand if abbr_match(k, c)]
@@ -273,12 +279,21 @@ if os.path.exists(EP_PATH):
                         if s2 not in res: res.append(s2)
         _club_cache[(k, variants)] = res
         return res
-    def same(a, b): return a == b or (len(a) >= 5 and len(b) >= 5 and a[:5] == b[:5])
+    def same(a, b):  # gleich bis auf Beugung: Prefix aus 5 Zeichen oder nur letzter Buchstabe anders (Opava/Opavě)
+        return a == b or (len(a) >= 5 and len(b) >= 5 and (a[:5] == b[:5] or a[:-1] == b[:-1]))
     def consistent(venue, s, strict=False):
         """Nennt der Spielort-Text einen Ort, müssen alle Ortswörter im Stadion- oder Vereinsnamen vorkommen.
         strict: auch Wörter, die Europlan nicht kennt (ohne Vereinsbezug kann ein unbekannter Ort ein anderer Ort sein)."""
         vt = {w for w in toks(venue) - street_words(venue) if w not in SURF and len(w) > 2} if strict else place_words(venue)
         if not vt: return True  # z. B. nur „tráva“
+        # Ein markantes Wort aus dem Spielort steht wörtlich im Stadionnamen („ShipEx Aréna, Srbská, Brno“ → ShipEx Aréna,
+        # „MěFS M.Valenty“ → Stadion Miroslava Valenty, „Na Litavce, Příbram“ → Stadion Na Litavce): das reicht
+        # Markant heißt: steht im Stadionnamen, aber nicht im Vereinsnamen (sonst ist es nur der Ort: Planá, Hradec)
+        if not strict:
+            sn, cn = toks(s['name']), toks(' '.join(s['clubs']))
+            if any(len(w) >= 4 and w not in SURF and w not in CITYW and not any(same(w, c) for c in cn)
+                   and any(w == b or (len(w) >= 5 and w[:-1] == b[:-1]) for b in sn) for w in toks(venue)):
+                return True
         st = toks(s['name'] + ' ' + ' '.join(s['clubs']))
         return all(any(same(a, b) for b in st) for a in vt)  # Stará Paka ≠ Nová Paka
     def score(venue, s):
