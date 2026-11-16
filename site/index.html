@@ -449,7 +449,7 @@ let byPlace=new Map();
 function openPlace(pi){
   const p=P[pi], ms=byPlace.get(pk(pi))||[];
   const html='<div class="popup"><h3>'+esc(p[6]||p[0])+'</h3>'+(unsureWhy(p)?'<p class="hint">'+unsure(p)+' '+esc(unsureWhy(p))+'</p>':'')+'<div class="hint">'+[p[3]>=0?'Bezirk '+esc(D.okresy[p[3]][0]):'', ms.length?epLink(p,D.teams[ms[0][2]]):'', gmLink(p)].filter(Boolean).join(' · ')+'</div><ul>'+
-    ms.slice(0,30).map(m=>{const c=C[m[0]]; return '<li><b>'+new Date(m[1].slice(0,10)+'T12:00').toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'numeric'})+' '+(m[1].slice(11,16))+'</b> '+esc(D.teams[m[2]])+' – '+esc(D.teams[m[3]])+(m[4]?' <b>'+esc(m[4])+'</b>':'')+'<br><span class="hint">'+(c[2]?c[2]+'. Liga · ':'')+esc(c[0])+'</span></li>';}).join('')+(ms.length>30?'<li>… und '+(ms.length-30)+' weitere</li>':'')+'</ul></div>';
+    ms.slice(0,30).map(m=>{const c=C[m[0]]; return '<li><b>'+new Date(m[1].slice(0,10)+'T12:00').toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'numeric'})+' '+(m[1].slice(11,16))+'</b> '+esc(D.teams[m[2]])+' – '+esc(D.teams[m[3]])+(m[4]?' <b>'+esc(m[4])+'</b>':'')+'<br><span class="hint">'+(c[2]?c[2]+'. Liga · ':'')+esc(c[0])+' · <a href="'+compUrl(c)+'" target="_blank" rel="noopener">fotbal.cz</a></span></li>';}).join('')+(ms.length>30?'<li>… und '+(ms.length-30)+' weitere</li>':'')+'</ul></div>';
   L.popup({maxWidth:320}).setLatLng([p[1],p[2]]).setContent(html).openOn(map);
 }
 
