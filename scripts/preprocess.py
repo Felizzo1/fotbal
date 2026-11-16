@@ -167,11 +167,23 @@ def club_key(n):
     n = norm(re.sub(r',.*$', '', n.replace('"', ' ')))
     return ' '.join(w for w in n.split() if not EP_GENERIC.match(w) and not re.match(r'^\d{4}$', w))
 
+# Ortsnamen-Wörter aus OpenStreetMap (data/osm.json): unterscheiden Orte von Straßen- und Personennamen
+PLACEW = set(); CITYW = set()  # CITYW: Großstädte (Praha, Brno …) – als Ortsangabe im Spielort zu allgemein
+_osm_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'osm.json')
+if os.path.exists(_osm_path):
+    for _nm, _la, _lo, _typ in json.load(open(_osm_path, encoding='utf-8'))['places']:
+        PLACEW.update(w for w in norm(_nm).split() if len(w) >= 4)
+        if _typ == 'city' and len(norm(_nm).split()) == 1: CITYW.add(norm(_nm))  # nur einwortige (Praha, Brno), nicht „Ústí nad Labem“
+
 def street_words(venue):
-    """Wörter direkt vor einer Hausnummer sind Straßennamen („B.Němcové 3178, Česká Lípa“, „Bruslařská 1132/10“),
-    keine Ortsangabe."""
-    t = norm(venue).split()
-    return {t[i] for i in range(len(t) - 1) if t[i + 1].isdigit() and len(t[i + 1]) >= 2 and not t[i].isdigit()}
+    """Wörter direkt vor einer Hausnummer sind Straßennamen („B.Němcové 3178, Česká Lípa“, „Bruslařská 1132/10 Praha“),
+    keine Ortsangabe. Ausnahme Dorfadresse („Bludovice 23-tráva“): ein Ortsname, nach dem kein weiterer Ort mehr folgt."""
+    t = norm(venue).split(); out = set()
+    for i in range(len(t) - 1):
+        if t[i + 1].isdigit() and len(t[i + 1]) >= 2 and not t[i].isdigit():
+            later_place = any(w in PLACEW for w in t[i + 2:])
+            if t[i] not in PLACEW or later_place: out.add(t[i])
+    return out
 
 def km(a, b, c, d):
     r = math.pi / 180
@@ -199,9 +211,9 @@ if os.path.exists(EP_PATH):
             for dx in range(-r, r + 1):
                 out += grid.get((round(lat + dy / 10, 1), round(lon + dx / 10, 1)), [])
         return out
-    ART = re.compile(r'\b(umt|ut|umela|umelka|kunstrasen|artificial)\b')
+    ART = re.compile(r'\b(umt|ut|umela|umelka|kunstrasen|artificial|ut3g|umt3g|3g)\b')
     STOP = {'hriste', 'stadion', 'stadium', 'arena', 'areal', 'sportovni', 'fotbalove', 'fotbalovy', 'mestsky', 'tj', 'sk', 'fk', 'sokol', 'ul', 'na', 'u', 'v'}
-    SURF = {'trava', 'umt', 'ut', 'umela', 'umelka', 'zs', 'nad', 'pod', 'ul', 'tj', 'sk', 'fk', 'fc', 'ii', 'iii', 'uo'}
+    SURF = {'trava', 'umt', 'ut', 'umela', 'umelka', 'zs', 'nad', 'pod', 'ul', 'tj', 'sk', 'fk', 'fc', 'ii', 'iii', 'uo', 'ut3g', 'umt3g', '3g'}
     def toks(s): return {w for w in norm(s).split() if len(w) > 1 and w not in STOP and not w.isdigit()}
     def nums(s): return set(re.findall(r'\b\d\b', norm(s)))
     # Ortswörterbuch: alle Wörter aus Europlan-Stadion- und Vereinsnamen. Wörter im Spielort-Text, die dort nie vorkommen
@@ -212,14 +224,13 @@ if os.path.exists(EP_PATH):
             VOCAB.add(w)
             if len(w) >= 5: VOCAB5.add(w[:5])
     def known(w): return w in VOCAB or (len(w) >= 5 and w[:5] in VOCAB5)
-    # Ortsnamen-Wörter aus OpenStreetMap (um „Vápenná“ als Ort von „Pavla Srnička“ als Personennamen zu unterscheiden)
-    PLACEW = set()
-    _osm = os.path.join(os.path.dirname(EP_PATH), 'osm.json')
-    if os.path.exists(_osm):
-        for nm, *_ in json.load(open(_osm, encoding='utf-8'))['places']:
-            PLACEW.update(w for w in norm(nm).split() if len(w) >= 4)
-    def place_words(venue): return {w for w in toks(venue) - street_words(venue) if w not in SURF and len(w) > 2 and known(w)}
+    def place_words(venue): return {w for w in toks(venue) - street_words(venue) - CITYW if w not in SURF and len(w) > 2 and known(w)}
     # Vereinsname mit Abkürzungen: „Babice n. Svit.“ = „Babice nad Svitavou“, „A.F.C. Humpolec“ = „AFC Humpolec“
+    # Wortzahl des Original-Vereinsnamens („AFK Tišnov“ = 2, „Plzeň“ = 1): reine Ortsnamen sind keine Vereine
+    raw_words = defaultdict(int)
+    for s in EP:
+        for c in s['clubs']:
+            raw_words[club_key(c)] = max(raw_words[club_key(c)], len(c.split()))
     club_keys_by_tok = defaultdict(set)
     for k in ep_by_club:
         for w in k.split():
@@ -228,22 +239,39 @@ if os.path.exists(EP_PATH):
         lw = long.split()
         return all(any(b.startswith(a) or a.startswith(b) for b in lw) for a in short.split())
     _club_cache = {}
-    def club_stadiums(team):
+    def club_stadiums(team, variants=False):
         k = club_key(team)
-        if k in _club_cache: return _club_cache[k]
+        if (k, variants) in _club_cache: return _club_cache[(k, variants)]
         res = list(ep_by_club.get(k, []))
+        if variants and k:  # im Spielort genannter Ort/Verein: alle passenden Vereine, die Entfernung entscheidet später
+            cand = set().union(*(club_keys_by_tok.get(w[:4], set()) for w in k.split() if len(w) >= 4)) if any(len(w) >= 4 for w in k.split()) else set()
+            fwd = [c for c in cand if abbr_match(k, c)]
+            if 0 < len({re.sub(r'( (diverse|mladez|ii|iii))+$', '', c) for c in fwd}) <= 6:
+                for c in fwd:
+                    for s in ep_by_club[c]:
+                        if s not in res: res.append(s)
+        if variants:  # Ausweich- und Jugendplätze desselben Vereins
+            for v in ('diverse', 'mladez', 'b'):
+                for s in ep_by_club.get(k + ' ' + v, []):
+                    if s not in res: res.append(s)
         if not res and k:
             cand = set().union(*(club_keys_by_tok.get(w[:4], set()) for w in k.split() if len(w) >= 4)) if any(len(w) >= 4 for w in k.split()) else set()
             # zuerst Vereine, die alle Wörter des fotbal.cz-Namens erklären („babice n svit“ → „babice nad svitavou“),
             # erst danach kürzere Namen („babice“)
-            hits = [c for c in cand if abbr_match(k, c)] or [c for c in cand if abbr_match(c, k)]
+            # rückwärts (Europlan-Name ist Teil des fotbal.cz-Namens) nur mit mindestens zwei Wörtern: „Plzeň“ allein ist kein Verein
+            hits = [c for c in cand if abbr_match(k, c)] or [c for c in cand if (len(c.split()) >= 2 or raw_words[c] >= 2) and abbr_match(c, k)]
             # Varianten desselben Vereins („… diverse“, „… mladez“) zählen beim Limit nur einmal
             bases = {re.sub(r'( (diverse|mladez|ii|iii))+$', '', c) for c in hits}
             if 0 < len(bases) <= 3:  # mehr Treffer = zu allgemein (z. B. nur „Praha“)
                 for c in hits:
                     for s in ep_by_club[c]:
                         if s not in res: res.append(s)
-        _club_cache[k] = res
+        if variants and res:
+            for s in list(res):
+                for c in s['clubs']:
+                    for s2 in ep_by_club.get(club_key(c) + ' diverse', []):
+                        if s2 not in res: res.append(s2)
+        _club_cache[(k, variants)] = res
         return res
     def same(a, b): return a == b or (len(a) >= 5 and len(b) >= 5 and a[:5] == b[:5])
     def consistent(venue, s, strict=False):
@@ -257,6 +285,8 @@ if os.path.exists(EP_PATH):
         """Wie gut passt der Spielort-Text zum Stadionnamen (bei Vereinen mit mehreren Plätzen)?"""
         v, n = norm(venue), norm(s['name'])
         sc = len(toks(venue) & toks(s['name']))
+        ini = ''.join(w[0] for w in n.split() if w not in ('a', 'v', 'u', 'na', 'pod', 'nad'))
+        if any(3 <= len(w) <= 6 and w.isalpha() and w in ini for w in v.split()): sc += 3  # Kürzel: SCUK = Sportovní Centrum Univerzity Karlovy
         if bool(ART.search(v)) == bool(ART.search(n)): sc += 4   # Kunstrasen ja/nein stimmt überein (stärkstes Signal)
         if nums(venue) and nums(venue) == nums(s['name']): sc += 3  # „hřiště 2“ / „tráva č.2“ schlägt die Ligaliste
         if not nums(venue) and nums(s['name']):                     # Nebenplatz („hřiště 2“) …
@@ -301,9 +331,11 @@ if os.path.exists(EP_PATH):
             own = [pt for pt in parts if all(any(same(a, b) for b in norm(pt).split()) for a in vwords)]
             # für die Vereinssuche Abkürzungen behalten („Ústí n.L.“ = Ústí nad Labem, nicht TJ Sokol Ústí)
             vclub = ' '.join(w for w in norm(p['name']).split() if w not in SURF and w not in STOP)
-            for src in (own if own else [vclub]):
-                for s in club_stadiums(src):
-                    if km(p['lat'], p['lon'], s['lat'], s['lon']) <= 15 and consistent(p['name'], s):
+            # fremder Verein/Ort im Spielort („UMT Brozany“ bei TJ Slavoj Úštěk): bis 40 km, inkl. Ausweichplätze („… diverse“)
+            umt = bool(ART.search(norm(p['name'])))  # bei „UMT“ auch die Ausweichplätze des eigenen Vereins
+            for src, radius, variants in ([(pt, 15, umt) for pt in own] if own else [(vclub, 40, True)]):
+                for s in club_stadiums(src, variants):
+                    if km(p['lat'], p['lon'], s['lat'], s['lon']) <= radius and consistent(p['name'], s):
                         cands.setdefault(s['id'], s)
         if not cands: return None
         # Nennt der Spielort einen Ort, haben Stadien mit diesem Ort im Namen Vorrang (Javorník ≠ Vápenná);
@@ -319,7 +351,9 @@ if os.path.exists(EP_PATH):
             if named: cands = named
         if len(cands) == 1: return next(iter(cands.values()))
         bonus = lambda s: 2.5 if prior and s['id'] == prior['id'] else 0
-        ranked = sorted(((score(p['name'], s) + bonus(s), s['id'], s) for s in cands.values()), key=lambda x: -x[0])
+        # Abzug für Entfernung: bei gleichnamigen Orten gewinnt der nähere (Dubice, Kostomlaty)
+        ranked = sorted(((score(p['name'], s) + bonus(s) - km(p['lat'], p['lon'], s['lat'], s['lon']) / 10, s['id'], s)
+                         for s in cands.values()), key=lambda x: -x[0])
         return ranked[0][2] if ranked[0][0] > ranked[1][0] else None
 
     # Stimmen je Ort aus allen Heimspielen
@@ -425,7 +459,7 @@ if os.path.exists(OSM_PATH):
         # Zuerst immer in der Nähe des Vereinssitzes suchen, landesweit nur, wenn dort nichts passt.
         words = vt or tw
         ini = [w for w in norm(p['name'] if vt else p['home'].most_common(1)[0][0]).split() if len(w) == 1 and w.isalpha()]
-        town = find_town(words, p['lat'], p['lon'], initials=ini) if words else None
+        town = find_town(words, p['lat'], p['lon'], 30 if vt else 12, initials=ini) if words else None
         if not town and words and (not vt or any(oabbr(a, b) or oabbr(b, a) for a in vt for b in tw)):
             town = find_town(words, p['lat'], p['lon'], 300, ini)
         if town: center, rad = town, 1.5
