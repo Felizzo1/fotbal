@@ -12,6 +12,7 @@
     {"spielort": "UMTRA ,Holice", "verein": "1. HFK Olomouc", "europlan": 3370, "notiz": "Stadion 1. HFK Olomouc (Olomouc-Holice)"},
     {"spielort": "Neštěmice", "verein": "FK ČL Neštěmice", "europlan": 7079, "notiz": "Stadion Český Lev"},
     {"spielort": "SK Český Brod (ul. Sokolská 895)", "europlan": 8944, "notiz": "Na Kutilce"},
-    {"spielort": "Slavia HK, UMT", "europlan": 104145, "notiz": "Hřiště 3 TJ Slavia Hradec Králové (Kunstrasen)"}
+    {"spielort": "Slavia HK, UMT", "europlan": 104145, "notiz": "Hřiště 3 TJ Slavia Hradec Králové (Kunstrasen)"},
+    {"spielort": "Husovy sady-tráva", "verein": "Znojmo", "europlan": 3404, "notiz": "Městský stadion v Horním parku, bestätigt 16.11.2026"}
   ]
 }
