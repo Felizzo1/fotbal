@@ -181,6 +181,7 @@ if os.path.exists(EP_PATH):
     ep_by_club = defaultdict(list)
     for s in EP:
         for c in s['clubs']:
+            if c.lower().startswith('ehemals'): continue  # frühere Plätze eines Vereins nicht mehr verwenden
             k = club_key(c)
             if k and s not in ep_by_club[k]: ep_by_club[k].append(s)
     grid = defaultdict(list)  # grobes Raster für die Umkreissuche
@@ -205,6 +206,12 @@ if os.path.exists(EP_PATH):
             VOCAB.add(w)
             if len(w) >= 5: VOCAB5.add(w[:5])
     def known(w): return w in VOCAB or (len(w) >= 5 and w[:5] in VOCAB5)
+    # Ortsnamen-Wörter aus OpenStreetMap (um „Vápenná“ als Ort von „Pavla Srnička“ als Personennamen zu unterscheiden)
+    PLACEW = set()
+    _osm = os.path.join(os.path.dirname(EP_PATH), 'osm.json')
+    if os.path.exists(_osm):
+        for nm, *_ in json.load(open(_osm, encoding='utf-8'))['places']:
+            PLACEW.update(w for w in norm(nm).split() if len(w) >= 4)
     def place_words(venue): return {w for w in toks(venue) if w not in SURF and len(w) > 2 and known(w)}
     # Vereinsname mit Abkürzungen: „Babice n. Svit.“ = „Babice nad Svitavou“, „A.F.C. Humpolec“ = „AFC Humpolec“
     club_keys_by_tok = defaultdict(set)
@@ -224,7 +231,9 @@ if os.path.exists(EP_PATH):
             # zuerst Vereine, die alle Wörter des fotbal.cz-Namens erklären („babice n svit“ → „babice nad svitavou“),
             # erst danach kürzere Namen („babice“)
             hits = [c for c in cand if abbr_match(k, c)] or [c for c in cand if abbr_match(c, k)]
-            if 0 < len(hits) <= 3:  # mehr Treffer = zu allgemein (z. B. nur „Praha“)
+            # Varianten desselben Vereins („… diverse“, „… mladez“) zählen beim Limit nur einmal
+            bases = {re.sub(r'( (diverse|mladez|ii|iii))+$', '', c) for c in hits}
+            if 0 < len(bases) <= 3:  # mehr Treffer = zu allgemein (z. B. nur „Praha“)
                 for c in hits:
                     for s in ep_by_club[c]:
                         if s not in res: res.append(s)
@@ -244,7 +253,8 @@ if os.path.exists(EP_PATH):
         sc = len(toks(venue) & toks(s['name']))
         if bool(ART.search(v)) == bool(ART.search(n)): sc += 4   # Kunstrasen ja/nein stimmt überein (stärkstes Signal)
         if nums(venue) and nums(venue) == nums(s['name']): sc += 3  # „hřiště 2“ / „tráva č.2“ schlägt die Ligaliste
-        if not nums(venue) and nums(s['name']): sc -= 1             # Nebenplatz nur, wenn genannt
+        if not nums(venue) and nums(s['name']):                     # Nebenplatz („hřiště 2“) …
+            sc += 2 if ART.search(v) else -1                         # … bei „UMT“ wahrscheinlich, sonst nur wenn genannt
         return sc
 
     # Wettbewerb -> Europlan-Liga über gemeinsame Vereine
@@ -275,6 +285,20 @@ if os.path.exists(EP_PATH):
                  if km(p['lat'], p['lon'], s['lat'], s['lon']) <= 15 and consistent(p['name'], s)}
         if prior and consistent(p['name'], prior) and km(p['lat'], p['lon'], prior['lat'], prior['lon']) <= 25:
             cands.setdefault(prior['id'], prior)
+        # Nennt der Spielort-Text einen Verein (z. B. „FK Ústí n.L.- UMT.“ bei einem Heimspiel von SK Hostovice),
+        # kommen dessen Stadien dazu; den Vorrang regelt unten der Ortsname im Stadionnamen
+        # Nennt er nur den Ort des Heimvereins („Domažlice“ bei TJ Jiskra Domažlice), bleibt es bei dessen Plätzen;
+        # bei Spielgemeinschaften („Černotín/Ústí“) zählt der passende Teil.
+        vwords = [w for w in norm(p['name']).split() if w not in SURF and w not in STOP and len(w) > 2]
+        if vwords:
+            parts = [pt for pt in re.split(r'/', team) if pt.strip()]
+            own = [pt for pt in parts if all(any(same(a, b) for b in norm(pt).split()) for a in vwords)]
+            # für die Vereinssuche Abkürzungen behalten („Ústí n.L.“ = Ústí nad Labem, nicht TJ Sokol Ústí)
+            vclub = ' '.join(w for w in norm(p['name']).split() if w not in SURF and w not in STOP)
+            for src in (own if own else [vclub]):
+                for s in club_stadiums(src):
+                    if km(p['lat'], p['lon'], s['lat'], s['lon']) <= 15 and consistent(p['name'], s):
+                        cands.setdefault(s['id'], s)
         if not cands: return None
         # Nennt der Spielort einen Ort, haben Stadien mit diesem Ort im Namen Vorrang (Javorník ≠ Vápenná);
         # ein Kunstrasenplatz bleibt im Rennen, wenn der Spielort ausdrücklich Kunstrasen sagt (Ivančice ÚT → Němčice)
@@ -282,6 +306,10 @@ if os.path.exists(EP_PATH):
         if vt and len(cands) > 1:
             named = {k: s for k, s in cands.items() if all(any(same(a, b) for b in toks(s['name'])) for a in vt)
                      or (ART.search(norm(p['name'])) and ART.search(norm(s['name'])))}
+            # Platz laut Europlan-Liga bleibt im Rennen, solange sein Name keinen anderen Ort nennt
+            if prior and prior['id'] in cands and prior['id'] not in named:
+                if not any(w in PLACEW and not any(same(w, a) for a in vt) for w in toks(prior['name'])):
+                    named[prior['id']] = prior
             if named: cands = named
         if len(cands) == 1: return next(iter(cands.values()))
         bonus = lambda s: 2.5 if prior and s['id'] == prior['id'] else 0
@@ -338,7 +366,9 @@ if os.path.exists(OSM_PATH):
     def owords(v): return [w for w in norm(v).split() if len(w) > 2 and w not in OSTOP and not w.isdigit()]
     def osame(a, b): return a == b or (len(a) >= 5 and len(b) >= 5 and a[:5] == b[:5])
     pgrid = defaultdict(list)
-    for la, lo, nm, art in O['pitches']:
+    for la, lo, nm, art, *rest in O['pitches']:
+        diag = rest[0] if rest else 0
+        if 0 < diag < 80: continue  # Kleinfeld- und Trainingsplätze (Normalfeld ≥ ca. 100 m Diagonale)
         pgrid[(round(la, 1), round(lo, 1))].append((la, lo, nm, art))
     def pitches_near(lat, lon, rad):
         out = []
