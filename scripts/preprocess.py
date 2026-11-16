@@ -167,6 +167,12 @@ def club_key(n):
     n = norm(re.sub(r',.*$', '', n.replace('"', ' ')))
     return ' '.join(w for w in n.split() if not EP_GENERIC.match(w) and not re.match(r'^\d{4}$', w))
 
+def street_words(venue):
+    """Wörter direkt vor einer Hausnummer sind Straßennamen („B.Němcové 3178, Česká Lípa“, „Bruslařská 1132/10“),
+    keine Ortsangabe."""
+    t = norm(venue).split()
+    return {t[i] for i in range(len(t) - 1) if t[i + 1].isdigit() and len(t[i + 1]) >= 2 and not t[i].isdigit()}
+
 def km(a, b, c, d):
     r = math.pi / 180
     x = math.sin((c - a) * r / 2) ** 2 + math.cos(a * r) * math.cos(c * r) * math.sin((d - b) * r / 2) ** 2
@@ -212,7 +218,7 @@ if os.path.exists(EP_PATH):
     if os.path.exists(_osm):
         for nm, *_ in json.load(open(_osm, encoding='utf-8'))['places']:
             PLACEW.update(w for w in norm(nm).split() if len(w) >= 4)
-    def place_words(venue): return {w for w in toks(venue) if w not in SURF and len(w) > 2 and known(w)}
+    def place_words(venue): return {w for w in toks(venue) - street_words(venue) if w not in SURF and len(w) > 2 and known(w)}
     # Vereinsname mit Abkürzungen: „Babice n. Svit.“ = „Babice nad Svitavou“, „A.F.C. Humpolec“ = „AFC Humpolec“
     club_keys_by_tok = defaultdict(set)
     for k in ep_by_club:
@@ -243,7 +249,7 @@ if os.path.exists(EP_PATH):
     def consistent(venue, s, strict=False):
         """Nennt der Spielort-Text einen Ort, müssen alle Ortswörter im Stadion- oder Vereinsnamen vorkommen.
         strict: auch Wörter, die Europlan nicht kennt (ohne Vereinsbezug kann ein unbekannter Ort ein anderer Ort sein)."""
-        vt = {w for w in toks(venue) if w not in SURF and len(w) > 2} if strict else place_words(venue)
+        vt = {w for w in toks(venue) - street_words(venue) if w not in SURF and len(w) > 2} if strict else place_words(venue)
         if not vt: return True  # z. B. nur „tráva“
         st = toks(s['name'] + ' ' + ' '.join(s['clubs']))
         return all(any(same(a, b) for b in st) for a in vt)  # Stará Paka ≠ Nová Paka
@@ -363,7 +369,7 @@ if os.path.exists(OSM_PATH):
              'fotbalovy', 'mestsky', 'mestske', 'tj', 'sk', 'fk', 'fc', 'afk', 'sokol', 'nad', 'pod', 'ul', 'ulice', 'nam',
              'namesti', 'skola', 'zs', 'muzi', 'dorost', 'zaci', 'zeny', 'hlavni', 'treninkove', 'treninkova', 'pristavek'}
     O_ART = re.compile(r'\b(umt|ut|umela|umelka|umt\d?|3g)\b')
-    def owords(v): return [w for w in norm(v).split() if len(w) > 2 and w not in OSTOP and not w.isdigit()]
+    def owords(v): sw = street_words(v); return [w for w in norm(v).split() if len(w) > 2 and w not in OSTOP and not w.isdigit() and w not in sw]
     def osame(a, b): return a == b or (len(a) >= 5 and len(b) >= 5 and a[:5] == b[:5])
     pgrid = defaultdict(list)
     for la, lo, nm, art, *rest in O['pitches']:
