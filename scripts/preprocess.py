@@ -164,15 +164,19 @@ EP_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data',
 EP_GENERIC = re.compile(r'^(tj|sk|fk|fc|afk|mfk|sfk|sc|ss|ofk|telovychovna|jednota|sportovni|fotbalovy|klub|football|club|sokol|zeny|zen|zs|as|os|sro|spolek|[a-dfosrz])$')
 
 def club_key(n):
+    n = re.sub(r'\b([nup])([A-ZÁ-Ž])', r'\1 \2', n)  # zusammengeklebte Abkürzung: „Štítná nVl“ = nad Vláří
     n = norm(re.sub(r',.*$', '', n.replace('"', ' ')))
     return ' '.join(w for w in n.split() if not EP_GENERIC.match(w) and not re.match(r'^\d{4}$', w))
 
 # Ortsnamen-Wörter aus OpenStreetMap (data/osm.json): unterscheiden Orte von Straßen- und Personennamen
 PLACEW = set(); CITYW = set()  # CITYW: Großstädte (Praha, Brno …) – als Ortsangabe im Spielort zu allgemein
+PLACEPOS = defaultdict(list)    # Ortsnamen-Wort → Koordinaten der Orte (für „liegt der genannte Ort in der Nähe?“)
 _osm_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'osm.json')
 if os.path.exists(_osm_path):
     for _nm, _la, _lo, _typ in json.load(open(_osm_path, encoding='utf-8'))['places']:
         PLACEW.update(w for w in norm(_nm).split() if len(w) >= 4)
+        for w in norm(_nm).split():
+            if len(w) >= 4: PLACEPOS[w[:5]].append((w, _la, _lo))
         if _typ == 'city' and len(norm(_nm).split()) == 1: CITYW.add(norm(_nm))  # nur einwortige (Praha, Brno), nicht „Ústí nad Labem“
 
 def street_words(venue):
@@ -189,6 +193,15 @@ def km(a, b, c, d):
     r = math.pi / 180
     x = math.sin((c - a) * r / 2) ** 2 + math.cos(a * r) * math.cos(c * r) * math.sin((d - b) * r / 2) ** 2
     return 12742 * math.asin(math.sqrt(x))
+
+# Von Hand geklärte Spielorte (data/zuordnung_manuell.json) haben Vorrang vor der Automatik
+MANUAL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'zuordnung_manuell.json')
+MANUAL = json.load(open(MANUAL_PATH, encoding='utf-8'))['eintraege'] if os.path.exists(MANUAL_PATH) else []
+def manual_for(p):
+    for e in MANUAL:
+        if e['spielort'] == p['name'] and (not e.get('verein') or e['verein'] in p['home']): return e
+    return None
+manual_fixed = {}  # Ort-Index → Eintrag
 
 ep_href = [''] * len(place_list)
 ep_name = [''] * len(place_list)
@@ -330,10 +343,36 @@ if os.path.exists(EP_PATH):
             if ov >= 3 and ov >= 0.5 * min(len(ks), len(leagues[j])): comp_league[ci] = j
     ep_stats['Wettbewerbe mit Europlan-Liga'] = len(comp_league)
 
+    def home_ok(p, s):
+        """Platz des Heimvereins passt, außer ein Wort aus dem Spielort zeigt auf einen ANDEREN Platz in der Nähe.
+        Straßennamen wie „Brankovická“ zeigen auf keinen Platz und stören deshalb nicht; „Javorník“ schließt Vápenná aus."""
+        if consistent(p['name'], s): return True
+        own = toks(s['name'] + ' ' + ' '.join(s['clubs']))
+        miss = [w for w in place_words(p['name']) if not any(same(w, b) for b in own)]
+        # ein genannter echter Ort (bis 60 km), der nicht zum Platz passt (Vícenice, Deštná, Bezděkov): anderer Spielort.
+        # Ausgenommen Personennamen nach einem Initial („B. Němcové“, „M.Horákové“) – das sind Straßen.
+        t = norm(p['name']).split()
+        person = {t[i + 1] for i in range(len(t) - 1) if len(t[i]) == 1 and t[i].isalpha()}
+        for w in miss:
+            if w in person: continue
+            if any(same(w, pw) and km(p['lat'], p['lon'], la, lo) <= 60 for pw, la, lo in PLACEPOS.get(w[:5], ())):
+                return False
+        for o in near(p['lat'], p['lon']):
+            if o['id'] != s['id'] and km(p['lat'], p['lon'], o['lat'], o['lon']) <= 15:
+                ot = toks(o['name'] + ' ' + ' '.join(o['clubs']))
+                if any(same(w, b) for w in miss for b in ot): return False
+        return True
+
     def pick(p, team, prior):
         """Stadion für Heimverein `team` am Ort `p`; `prior` = Platz laut Europlan-Liga (oder None)."""
         cands = {s['id']: s for s in club_stadiums(team)
                  if km(p['lat'], p['lon'], s['lat'], s['lon']) <= 15 and consistent(p['name'], s)}
+        if not cands:  # Rückfall: Ausweichplätze des Vereins („… diverse“), z. B. Areál Břízky bei FK Jablonec B
+            cands = {s['id']: s for s in club_stadiums(team, True)
+                     if km(p['lat'], p['lon'], s['lat'], s['lon']) <= 15 and consistent(p['name'], s)}
+        if not cands:  # zweiter Rückfall: Plätze des Heimvereins, solange der Spielort nicht auf einen anderen Platz zeigt
+            cands = {s['id']: s for s in club_stadiums(team, True)
+                     if km(p['lat'], p['lon'], s['lat'], s['lon']) <= 15 and home_ok(p, s)}
         if prior and consistent(p['name'], prior) and km(p['lat'], p['lon'], prior['lat'], prior['lon']) <= 25:
             cands.setdefault(prior['id'], prior)
         # Nennt der Spielort-Text einen Verein (z. B. „FK Ústí n.L.- UMT.“ bei einem Heimspiel von SK Hostovice),
@@ -385,10 +424,27 @@ if os.path.exists(EP_PATH):
         votes[pi][s['id'] if s else 0] += 2 if prior else 1  # Liga-Angaben zählen doppelt
     for i, p in enumerate(place_list):
         best = None
-        nz = Counter({k: c for k, c in votes.get(i, {}).items() if k})  # Spiele ohne Treffer zählen nicht mit
-        if nz:
+        man = manual_for(p)
+        if man:
+            manual_fixed[i] = man; ep_stats['von Hand'] += 1
+            if man.get('europlan') in EP_BY_ID: best = EP_BY_ID[man['europlan']]
+            elif 'lat' in man:
+                p['lat'], p['lon'] = man['lat'], man['lon']
+                p['ok'], p['kr'] = locate(p['lat'], p['lon'], OK), locate(p['lat'], p['lon'], KR)
+                ep_name[i] = man.get('name', ''); continue
+            else: continue  # „weglassen“: bleibt unsicher
+        nz = Counter({k: c for k, c in votes.get(i, {}).items() if k}) if not best else Counter()  # Spiele ohne Treffer zählen nicht mit
+        if nz and not best:
             sid, n = nz.most_common(1)[0]
-            if n >= 0.6 * sum(nz.values()): best = EP_BY_ID[sid]; ep_stats['über Verein/Liga'] += 1
+            tot = sum(nz.values())
+            top = [EP_BY_ID[k] for k, c in nz.items() if c >= 0.25 * tot]
+            if n >= 0.6 * tot: best = EP_BY_ID[sid]
+            # A- und B-Team auf verschiedenen Plätzen derselben Anlage (Holice: Hauptplatz/hřiště 2): Hauptkandidat
+            elif all(km(a['lat'], a['lon'], b['lat'], b['lon']) <= 0.5 for a in top for b in top): best = EP_BY_ID[sid]
+            else:  # sonst der nächstgelegene Kandidat mit mindestens 40 % der Stimmen (Pěnčín u Jbc ≠ Pěnčín u Turnova)
+                near40 = sorted((km(p['lat'], p['lon'], EP_BY_ID[k]['lat'], EP_BY_ID[k]['lon']), k) for k, c in nz.items() if c >= 0.4 * tot)
+                if near40: best = EP_BY_ID[near40[0][1]]
+            if best: ep_stats['über Verein/Liga'] += 1
             else: ep_stats['mehrdeutig'] += 1; continue
         # nächstes Stadion bis 1 km, wenn kein zweites in der Nähe liegt
         if not best:
@@ -466,6 +522,9 @@ if os.path.exists(OSM_PATH):
         return (best[1], best[2]) if best else None
     for i, p in enumerate(place_list):
         if ep_href[i]: continue
+        if i in manual_fixed:  # von Hand geklärt: Koordinaten gelten als sicher, „weglassen“ bleibt unsicher
+            if 'lat' in manual_fixed[i]: osm_flag[i] = 1
+            continue
         vt = owords(p['name'])
         tw = [w for w in owords(p['home'].most_common(1)[0][0]) if w not in CLUBW] if p['home'] else []
         center, rad = (p['lat'], p['lon']), 2.0

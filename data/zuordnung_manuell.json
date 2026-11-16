@@ -1,0 +1,6 @@
+{
+  "_hinweis": "Von Hand geklärte Spielorte. Hat Vorrang vor der automatischen Zuordnung in scripts/preprocess.py. spielort = Spielort-Text von fotbal.cz (genau), verein = Heimverein (optional, genau wie bei fotbal.cz), dann entweder europlan = Stadion-ID (Zahl aus …/stadion-1234.html) oder lat/lon (z. B. aus Google Maps). Mit \"weglassen\": true bleibt der Ort als unsicher markiert.",
+  "eintraege": [
+    {"spielort": "Bažantnice-tráva", "verein": "Karviná B", "europlan": 8951, "notiz": "Fotbalový areál Bažantnice (MFK Karviná diverse), bestätigt 16.11.2026"}
+  ]
+}
