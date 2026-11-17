@@ -36,7 +36,7 @@ body{background:var(--bg);color:var(--ink);font:15px/1.4 var(--body);display:fle
 header{position:relative;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px 16px;background:var(--flag-blue);color:#fff}
 header::after{content:"";position:absolute;left:0;right:0;bottom:0;height:6px;background:linear-gradient(#fff 0 50%,var(--flag-red) 50% 100%)}
 header h1{display:flex;align-items:center;gap:10px;font:700 28px/1 var(--display);letter-spacing:.4px;margin:0;text-wrap:balance}
-header h1 svg{flex:none;width:30px;height:20px;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,.6)}
+header h1 .logo{flex:none;height:36px;width:auto;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
 header .meta{color:rgba(255,255,255,.78);font-size:13px}
 #logout{color:rgba(255,255,255,.78)!important}
 #theme{margin-left:auto;align-self:center;background:transparent;color:#fff;border-color:rgba(255,255,255,.55)}
@@ -112,7 +112,7 @@ section.list{overflow:auto;border-left:1px solid var(--line);background:var(--pa
 #gate{position:fixed;inset:0;z-index:1000;background:var(--bg);display:none;align-items:center;justify-content:center;padding:16px}
 #gate form{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:24px;width:100%;max-width:360px;display:flex;flex-direction:column;gap:12px}
 #gate h2{display:flex;align-items:center;gap:10px;font:700 26px/1 var(--display);margin:0;color:var(--accent)}
-#gate h2 svg{width:30px;height:20px;border-radius:2px;box-shadow:0 0 0 1px var(--line)}
+#gate h2 .logo{height:36px;width:auto}
 #gate form{border-top:6px solid var(--flag-blue)}
 #gate input[type=password]{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%;font:inherit;color:var(--ink)}
 #gate .err{color:var(--hot);font-size:13px;min-height:1em;margin:0}
@@ -123,7 +123,7 @@ section.list{overflow:auto;border-left:1px solid var(--line);background:var(--pa
 <body data-view="list">
 <div id="gate" role="dialog" aria-modal="true" aria-labelledby="gate-title">
   <form id="gateform" autocomplete="on">
-    <h2 id="gate-title" class="gate-title"><svg viewBox="0 0 900 600" aria-hidden="true"><rect width="900" height="300" fill="#fff"/><rect y="300" width="900" height="300" fill="#D7141A"/><path d="M0 0 450 300 0 600z" fill="#11457E"/></svg>Klobása-Planer</h2>
+    <h2 id="gate-title" class="gate-title"><img class="logo" src="logo.png?v=5" alt="" width="29" height="36">Klobása-Planer</h2>
     <p class="hint">Die Spieldaten sind verschlüsselt. Bitte Passwort eingeben.</p>
     <input type="text" name="username" value="spielfinder" autocomplete="username" hidden>
     <label class="f" for="pw">Passwort<input type="password" id="pw" autocomplete="current-password" required></label>
@@ -133,7 +133,7 @@ section.list{overflow:auto;border-left:1px solid var(--line);background:var(--pa
   </form>
 </div>
 <header>
-  <h1><svg viewBox="0 0 900 600" aria-hidden="true"><rect width="900" height="300" fill="#fff"/><rect y="300" width="900" height="300" fill="#D7141A"/><path d="M0 0 450 300 0 600z" fill="#11457E"/></svg>Klobása-Planer</h1>
+  <h1><img class="logo" src="logo.png?v=5" alt="" width="29" height="36">Klobása-Planer</h1>
   <span class="meta" id="meta">Lade Spielpläne …</span>
   <button type="button" id="logout" hidden>Passwort auf diesem Gerät vergessen</button>
   <button type="button" class="btn" id="theme"></button>

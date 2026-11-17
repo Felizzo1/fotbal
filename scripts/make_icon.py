@@ -5,6 +5,7 @@ Aufruf: python3 scripts/make_icon.py site
   favicon-32.png                                  – transparent, eng zugeschnitten (Browser-Tab)
   icon-512.png, icon-192.png                      – transparent (Web-App, „any“)
   apple-touch-icon.png                            – auf dunklem Grund (iOS macht Transparentes sonst schwarz)
+  logo.png                                        – Logo oben links auf der Seite (transparent)
   icon-maskable-512.png, icon-maskable-192.png    – dunkler Grund mit Rand, damit Android beim runden Zuschnitt nichts abschneidet
 """
 import os, sys
@@ -27,4 +28,6 @@ for size in (512, 192):
     framed(0.86).resize((size, size), Image.LANCZOS).save(f'{out}/icon-{size}.png', optimize=True)
     framed(0.72, BG).convert('RGB').resize((size, size), Image.LANCZOS).save(f'{out}/icon-maskable-{size}.png', optimize=True)
 framed(0.84, BG).convert('RGB').resize((180, 180), Image.LANCZOS).save(f'{out}/apple-touch-icon.png', optimize=True)
+# Logo oben links auf der Seite (transparent, 4-fach für scharfe Darstellung bei 36 px Höhe)
+logo = motif.resize((round(motif.width * 144 / motif.height), 144), Image.LANCZOS); logo.save(f'{out}/logo.png', optimize=True)
 print('ok, Motiv', motif.size)
