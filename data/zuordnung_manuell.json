@@ -16,6 +16,7 @@
     {"spielort": "Husovy sady-tráva", "verein": "Znojmo", "europlan": 3404, "notiz": "Městský stadion v Horním parku, bestätigt 16.11.2026"},
     {"spielort": "Vícenice-tráva", "europlan": 103748, "notiz": "Hřiště Vícenice (SK Fotbalová škola Třebíč B), bestätigt 16.11.2026"},
     {"spielort": "Blšany", "verein": "FK Dobroměřice", "europlan": 3338, "notiz": "Stadion FK Chmel Blšany; Ausweichplatz, vermutlich wegen Sanierung des eigenen Platzes – bestätigt 17.11.2026"},
-    {"spielort": "Nová Ves", "verein": "Nová Ves u NMnM", "europlan": 45323, "notiz": "Hřiště TJ Nová Ves u Nového Města na Moravě, bestätigt 17.11.2026"}
+    {"spielort": "Nová Ves", "verein": "Nová Ves u NMnM", "europlan": 45323, "notiz": "Hřiště TJ Nová Ves u Nového Města na Moravě, bestätigt 17.11.2026"},
+    {"spielort": "Praha-Šeberov UMT", "verein": "TJ Viktoria Vestec", "europlan": 44402, "notiz": "Sportovní centrum TJ Viktoria Vestec, bestätigt 17.11.2026"}
   ]
 }
