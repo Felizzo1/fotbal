@@ -14,6 +14,7 @@
     {"spielort": "SK Český Brod (ul. Sokolská 895)", "europlan": 8944, "notiz": "Na Kutilce"},
     {"spielort": "Slavia HK, UMT", "europlan": 104145, "notiz": "Hřiště 3 TJ Slavia Hradec Králové (Kunstrasen)"},
     {"spielort": "Husovy sady-tráva", "verein": "Znojmo", "europlan": 3404, "notiz": "Městský stadion v Horním parku, bestätigt 16.11.2026"},
-    {"spielort": "Vícenice-tráva", "europlan": 103748, "notiz": "Hřiště Vícenice (SK Fotbalová škola Třebíč B), bestätigt 16.11.2026"}
+    {"spielort": "Vícenice-tráva", "europlan": 103748, "notiz": "Hřiště Vícenice (SK Fotbalová škola Třebíč B), bestätigt 16.11.2026"},
+    {"spielort": "Blšany", "verein": "FK Dobroměřice", "europlan": 3338, "notiz": "Stadion FK Chmel Blšany; Ausweichplatz, vermutlich wegen Sanierung des eigenen Platzes – bestätigt 17.11.2026"}
   ]
 }
