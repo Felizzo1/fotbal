@@ -190,7 +190,7 @@ section.list{overflow:auto;border-left:1px solid var(--line);background:var(--pa
     <fieldset>
       <legend>Kategorie</legend>
       <div class="chips" id="cats"></div>
-      <div class="chips"><button class="chip" type="button" id="cups" aria-pressed="true">Pokalspiele</button></div>
+      <div class="chips"><button class="chip" type="button" id="leagues" aria-pressed="true">Ligaspiele</button><button class="chip" type="button" id="cups" aria-pressed="true">Pokalspiele</button></div>
     </fieldset>
 
     <fieldset>
@@ -264,9 +264,9 @@ const gen=new Date(D.generated);
 $('#meta').textContent='Saison '+D.season+' · '+D.matches.length.toLocaleString('de-DE')+' Spiele · Stand '+gen.toLocaleDateString('de-DE')+' '+gen.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
 
 // ---------- Zustand ----------
-const S={from:'',to:'',cats:new Set([0,1]),cups:true,levels:new Set([1,2,3,4,5,6,7,8,9,10,0]),kraj:-1,okres:-1,center:null,radius:25,q:'',results:false,limit:200,timesOff:new Set()};
-try{ const s=JSON.parse(localStorage.getItem('fcz-filter')||'null'); if(s){ S.cats=new Set(s.cats); S.cups=s.cups; S.levels=new Set(s.levels); S.radius=s.radius||25; S.kraj=s.kraj??-1; S.okres=s.okres??-1; S.center=s.center||null; S.results=!!s.results; } }catch(e){}
-const save=()=>{ try{ localStorage.setItem('fcz-filter',JSON.stringify({cats:[...S.cats],cups:S.cups,levels:[...S.levels],radius:S.radius,kraj:S.kraj,okres:S.okres,center:S.center,results:S.results})); }catch(e){} };
+const S={from:'',to:'',cats:new Set([0,1]),cups:true,leagues:true,levels:new Set([1,2,3,4,5,6,7,8,9,10,0]),kraj:-1,okres:-1,center:null,radius:25,q:'',results:false,limit:200,timesOff:new Set()};
+try{ const s=JSON.parse(localStorage.getItem('fcz-filter')||'null'); if(s){ S.cats=new Set(s.cats); S.cups=s.cups; S.leagues=s.leagues!==false; S.levels=new Set(s.levels); S.radius=s.radius||25; S.kraj=s.kraj??-1; S.okres=s.okres??-1; S.center=s.center||null; S.results=!!s.results; } }catch(e){}
+const save=()=>{ try{ localStorage.setItem('fcz-filter',JSON.stringify({cats:[...S.cats],cups:S.cups,leagues:S.leagues,levels:[...S.levels],radius:S.radius,kraj:S.kraj,okres:S.okres,center:S.center,results:S.results})); }catch(e){} };
 
 // ---------- Zeitraum ----------
 function setQuick(q){
@@ -288,6 +288,8 @@ $('#to').onchange=e=>{S.to=e.target.value; if(S.from&&S.to&&S.to<S.from) S.from=
 // ---------- Kategorien und Ebenen ----------
 D.cats.forEach((c,i)=>{ const b=document.createElement('button'); b.type='button'; b.className='chip'; b.textContent=c; b.setAttribute('aria-pressed',S.cats.has(i)); b.onclick=()=>{ S.cats.has(i)?S.cats.delete(i):S.cats.add(i); b.setAttribute('aria-pressed',S.cats.has(i)); render(); }; $('#cats').appendChild(b); });
 $('#cups').setAttribute('aria-pressed',S.cups); $('#cups').onclick=()=>{S.cups=!S.cups; $('#cups').setAttribute('aria-pressed',S.cups); render();};
+// Ligaspiele (alles außer Pokal, Männer und Frauen) gesammelt an/aus; die Ligaebenen darunter gelten zusätzlich
+$('#leagues').setAttribute('aria-pressed',S.leagues); $('#leagues').onclick=()=>{S.leagues=!S.leagues; $('#leagues').setAttribute('aria-pressed',S.leagues); render();};
 const LV=[1,2,3,4,5,6,7,8,9,10,0];
 // „Alle“ als erster Knopf in der Reihe; 0 = Ebene nicht erkannt: bleibt im Filter (bei „Alle“ sichtbar), ohne eigenen Knopf
 const allLv=document.createElement('button'); allLv.type='button'; allLv.className='chip'; allLv.textContent='Alle';
@@ -355,6 +357,7 @@ function filtered(){
     const dt=m[1]; if(dt<from||dt>to) continue;
     const c=C[m[0]]; if(!S.cats.has(c[1])) continue;
     if(c[3]&&!S.cups) continue;
+    if(!c[3]&&!S.leagues) continue;
     if(c[1]===0&&!c[3]&&!S.levels.has(c[2]||0)) continue;
     if(!S.results&&m[4]&&/\d/.test(m[4])&&dt<nowStr) continue;
     const p=m[5]>=0?P[m[5]]:null;
