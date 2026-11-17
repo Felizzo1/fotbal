@@ -150,14 +150,27 @@ NOVENUE = {}
 if os.path.exists(_man_path):
     _ep_pos = {s['id']: (s['lat'], s['lon']) for s in json.load(open(_ep_path, encoding='utf-8'))['stadiums']} if os.path.exists(_ep_path) else {}
     for e in json.load(open(_man_path, encoding='utf-8'))['eintraege']:
-        if e.get('spielort') == '' and e.get('verein'):
+        if e.get('spielort') in ('', '*') and e.get('verein'):
             pos = _ep_pos.get(e.get('europlan')) or ((e['lat'], e['lon']) if 'lat' in e else None)
             if pos: NOVENUE[e['verein']] = pos
+# Verein fehlt in der fotbal.cz-Vereinskarte (z. B. Frýdek-Místek): Position über den Vereinsnamen bei Europlan
+_GEN = {'tj', 'sk', 'fk', 'fc', 'afk', 'mfk', 'sfc', 'sokol', 'z', 's', 'a', 'b', 'c', 'd', 'as', 'zs', 'spolek'}
+EP_CLUBPOS = []
+if os.path.exists(_ep_path):
+    for _s in json.load(open(_ep_path, encoding='utf-8'))['stadiums']:
+        for _c in _s['clubs']:
+            if not re.search(r'ehemals|diverse', _c, re.I):
+                EP_CLUBPOS.append((set(norm(_c).split()), _s['lat'], _s['lon']))
+def coords_by_name(team):
+    ws = {w for w in norm(re.sub(r',.*$', '', team)).split() if w not in _GEN and len(w) > 1}
+    hits = [(la, lo) for cw, la, lo in EP_CLUBPOS if ws and ws <= cw]
+    return hits[0] if hits else None
 
 for m in matches:
     ci, rnd, hn, hc, an, ac, score, dt, venue, spec, mid = m
     xy = coords_for(venue, hc)
-    if not xy and not venue and hn in NOVENUE: xy = NOVENUE[hn]
+    if not xy and hn in NOVENUE: xy = NOVENUE[hn]
+    if not xy: xy = coords_by_name(hn)
     if not xy:
         match_place.append(-1); continue
     key = (venue or hn, round(xy[0], 4), round(xy[1], 4))
@@ -214,6 +227,8 @@ def manual_for(p):
         if e['spielort'] == p['name'] and (not e.get('verein') or e['verein'] in p['home']): return e
         # leerer Spielort: gilt für Spiele des Vereins ohne Spielortangabe (Ortsname = Vereinsname)
         if e['spielort'] == '' and e.get('verein') and p['name'] == e['verein']: return e
+        # „*“: gilt für alle Heimspiele des Vereins, egal welcher Spielort angegeben ist
+        if e['spielort'] == '*' and e.get('verein') and e['verein'] in p['home']: return e
     return None
 manual_fixed = {}  # Ort-Index → Eintrag
 

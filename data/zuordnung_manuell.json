@@ -1,5 +1,5 @@
 {
-  "_hinweis": "Von Hand geklärte Spielorte. Hat Vorrang vor der automatischen Zuordnung in scripts/preprocess.py. spielort = Spielort-Text von fotbal.cz (genau), verein = Heimverein (optional, genau wie bei fotbal.cz), dann entweder europlan = Stadion-ID (Zahl aus …/stadion-1234.html) oder lat/lon (z. B. aus Google Maps). Mit \"weglassen\": true bleibt der Ort als unsicher markiert.",
+  "_hinweis": "Von Hand geklärte Spielorte. Hat Vorrang vor der automatischen Zuordnung in scripts/preprocess.py. spielort = Spielort-Text von fotbal.cz (genau), verein = Heimverein (optional, genau wie bei fotbal.cz), dann entweder europlan = Stadion-ID (Zahl aus …/stadion-1234.html) oder lat/lon (z. B. aus Google Maps). Mit \"weglassen\": true bleibt der Ort als unsicher markiert. spielort \"*\" = alle Heimspiele des Vereins, spielort \"\" = nur Spiele ohne Spielortangabe.",
   "eintraege": [
     {"spielort": "Bažantnice-tráva", "verein": "Karviná B", "europlan": 8951, "notiz": "Fotbalový areál Bažantnice (MFK Karviná diverse), bestätigt 16.11.2026"},
     {"spielort": "Na Litavce, Příbram", "europlan": 3334, "notiz": "Stadion Na Litavce; Vereinssitz bei fotbal.cz falsch (Brno)"},
@@ -18,6 +18,8 @@
     {"spielort": "Blšany", "verein": "FK Dobroměřice", "europlan": 3338, "notiz": "Stadion FK Chmel Blšany; Ausweichplatz, vermutlich wegen Sanierung des eigenen Platzes – bestätigt 17.11.2026"},
     {"spielort": "Nová Ves", "verein": "Nová Ves u NMnM", "europlan": 45323, "notiz": "Hřiště TJ Nová Ves u Nového Města na Moravě, bestätigt 17.11.2026"},
     {"spielort": "Praha-Šeberov UMT", "verein": "TJ Viktoria Vestec", "europlan": 44402, "notiz": "Sportovní centrum TJ Viktoria Vestec, bestätigt 17.11.2026"},
-    {"spielort": "Týniště - Olšina", "verein": "SK Týniště n. O.", "europlan": 8876, "notiz": "Stadion SK Týniště nad Orlicí, bestätigt 17.11.2026"}
+    {"spielort": "Týniště - Olšina", "verein": "SK Týniště n. O.", "europlan": 8876, "notiz": "Stadion SK Týniště nad Orlicí, bestätigt 17.11.2026"},
+    {"spielort": "*", "verein": "Frýdek-Místek", "europlan": 3412, "notiz": "Stadion Stovky (alle Heimspiele), bestätigt 17.11.2026"},
+    {"spielort": "*", "verein": "Frýdek-Místek B", "europlan": 3412, "notiz": "Stadion Stovky (alle Heimspiele), bestätigt 17.11.2026"}
   ]
 }
