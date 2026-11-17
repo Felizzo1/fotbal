@@ -86,6 +86,9 @@ keep = [i for i, c in enumerate(comps) if classify(c)[0] < len(CATS)]
 remap = {o: n for n, o in enumerate(keep)}
 comps = [comps[i] for i in keep]
 matches = [(remap[m[0]],) + tuple(m[1:]) for m in matches if m[0] in remap]
+# Spielfrei („volno“, „volný los“) und Platzhalter („NEUVEDENO“ = nicht angegeben) sind keine echten Spiele
+_BYE = re.compile(r'^\W*(volno|voln[yý] los|neuvedeno)\b', re.I)
+matches = [m for m in matches if not (_BYE.match(m[2] or '') or _BYE.match(m[4] or ''))]
 
 # ---------- Orte und Koordinaten ----------
 def norm(s):
@@ -457,10 +460,12 @@ if os.path.exists(EP_PATH):
         if man:
             manual_fixed[i] = man; ep_stats['von Hand'] += 1
             if man.get('europlan') in EP_BY_ID: best = EP_BY_ID[man['europlan']]
-            elif 'lat' in man:
+            elif 'lat' in man:  # Koordinaten von Hand, ggf. mit Europlan-Link eines Platzes außerhalb unseres Abzugs (Pištín)
                 p['lat'], p['lon'] = man['lat'], man['lon']
                 p['ok'], p['kr'] = locate(p['lat'], p['lon'], OK), locate(p['lat'], p['lon'], KR)
-                ep_name[i] = man.get('name', ''); continue
+                ep_name[i] = man.get('name', '')
+                if man.get('href'): ep_href[i] = man['href']
+                continue
             else: continue  # „weglassen“: bleibt unsicher
         nz = Counter({k: c for k, c in votes.get(i, {}).items() if k}) if not best else Counter()  # Spiele ohne Treffer zählen nicht mit
         if nz and not best:

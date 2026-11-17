@@ -20,6 +20,11 @@
     {"spielort": "Praha-Šeberov UMT", "verein": "TJ Viktoria Vestec", "europlan": 44402, "notiz": "Sportovní centrum TJ Viktoria Vestec, bestätigt 17.11.2026"},
     {"spielort": "Týniště - Olšina", "verein": "SK Týniště n. O.", "europlan": 8876, "notiz": "Stadion SK Týniště nad Orlicí, bestätigt 17.11.2026"},
     {"spielort": "*", "verein": "Frýdek-Místek", "europlan": 3412, "notiz": "Stadion Stovky (alle Heimspiele), bestätigt 17.11.2026"},
-    {"spielort": "*", "verein": "Frýdek-Místek B", "europlan": 3412, "notiz": "Stadion Stovky (alle Heimspiele), bestätigt 17.11.2026"}
+    {"spielort": "*", "verein": "Frýdek-Místek B", "europlan": 3412, "notiz": "Stadion Stovky (alle Heimspiele), bestätigt 17.11.2026"},
+    {"spielort": "*", "verein": "TJ Albrechtice v Jizerských horách/Jiřetín", "europlan": 85853, "notiz": "Hřiště Albrechtice v Jizerských horách (Europlan-Suche nach Vereinsnamen, 17.11.2026)"},
+    {"spielort": "*", "verein": "Praktic FC Pištín", "europlan": 100989, "name": "Hřiště Pištín", "href": "h%C5%99i%C5%A1t%C4%9B-pi%C5%A1t%C3%ADn/stadion-100989.html", "lat": 49.04979, "lon": 14.33359, "notiz": "Hřiště Pištín, bei Europlan keiner Liga zugeordnet (Europlan-Suche, 17.11.2026)"},
+    {"spielort": "*", "verein": "Lipnice n. Sáz. B", "europlan": 104102, "notiz": "Hřiště Lipnice nad Sázavou (Europlan-Suche nach Vereinsnamen, 17.11.2026)"},
+    {"spielort": "*", "verein": "Tělovýchovná Jednota Sokol Troja z.s.", "europlan": 33738, "notiz": "Hřiště TJ Sokol Troja (Europlan-Suche nach Vereinsnamen, 17.11.2026)"},
+    {"spielort": "*", "verein": "FK Jiskra Kovářská/FK Rašovice B", "europlan": 78049, "notiz": "Fotbalové hřiště Kovářská (Europlan-Suche nach Vereinsnamen, 17.11.2026)"}
   ]
 }
