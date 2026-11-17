@@ -278,11 +278,16 @@ function setQuick(q){
   S.from=iso(a); S.to=iso(b); syncDates();
   document.querySelectorAll('#quick .chip').forEach(c=>c.setAttribute('aria-pressed',c.dataset.q===q));
 }
-// „bis“ darf nie vor „von“ liegen: Kalender begrenzen und beim Eintippen das andere Datum nachziehen
-function syncDates(){ S.timesOff.clear(); /* neuer Zeitraum: wieder alle Anstoßzeiten */ $('#from').value=S.from; $('#to').value=S.to; $('#to').min=S.from||''; $('#from').max=S.to||''; }
+// „von“ frei wählbar; „bis“ rutscht beim Ändern von „von“ mit und behält die Länge des Zeitraums
+// (21.–23.11. → von auf 27.11. → bis 29.11.). „bis“ kann nie vor „von“ liegen.
+function syncDates(){ S.timesOff.clear(); /* neuer Zeitraum: wieder alle Anstoßzeiten */ $('#from').value=S.from; $('#to').value=S.to; $('#to').min=S.from||''; $('#from').max=''; }
 const manualDate=()=>{ document.querySelectorAll('#quick .chip').forEach(c=>c.setAttribute('aria-pressed','false')); syncDates(); render(); };
 document.querySelectorAll('#quick .chip').forEach(c=>c.onclick=()=>{setQuick(c.dataset.q);render();});
-$('#from').onchange=e=>{S.from=e.target.value; if(S.from&&S.to&&S.from>S.to) S.to=S.from; manualDate();};
+const dayNo=s=>{ const [y,m,d]=s.split('-').map(Number); return Date.UTC(y,m-1,d)/864e5; };
+const fromDayNo=n=>{ const x=new Date(n*864e5); return x.getUTCFullYear()+'-'+pad(x.getUTCMonth()+1)+'-'+pad(x.getUTCDate()); };
+$('#from').onchange=e=>{ const old=S.from; S.from=e.target.value;
+  if(S.from&&S.to){ const span=old?Math.max(0,dayNo(S.to)-dayNo(old)):0; if(old) S.to=fromDayNo(dayNo(S.from)+span); if(S.to<S.from) S.to=S.from; }
+  manualDate(); };
 $('#to').onchange=e=>{S.to=e.target.value; if(S.from&&S.to&&S.to<S.from) S.from=S.to; manualDate();};
 
 // ---------- Kategorien und Ebenen ----------
