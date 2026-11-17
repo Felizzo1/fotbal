@@ -3,7 +3,7 @@
 
 Aufruf: python3 preprocess.py rohdaten.json[.gz] okresy.json kraje.json data.json
 """
-import gzip, json, re, sys
+import gzip, json, os, re, sys
 from collections import Counter, defaultdict
 
 raw_path, okresy_path, kraje_path, out_path = sys.argv[1:5]
@@ -143,9 +143,21 @@ KR = load_polys(kraje_path)
 places = {}   # (venueName, lat, lon) -> idx
 place_list = []
 match_place = []
+# Spiele ohne Spielort und ohne Verein in der Vereinskarte: Position aus der Zuordnungsliste (Eintrag mit leerem Spielort)
+_man_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'zuordnung_manuell.json')
+_ep_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'europlan.json')
+NOVENUE = {}
+if os.path.exists(_man_path):
+    _ep_pos = {s['id']: (s['lat'], s['lon']) for s in json.load(open(_ep_path, encoding='utf-8'))['stadiums']} if os.path.exists(_ep_path) else {}
+    for e in json.load(open(_man_path, encoding='utf-8'))['eintraege']:
+        if e.get('spielort') == '' and e.get('verein'):
+            pos = _ep_pos.get(e.get('europlan')) or ((e['lat'], e['lon']) if 'lat' in e else None)
+            if pos: NOVENUE[e['verein']] = pos
+
 for m in matches:
     ci, rnd, hn, hc, an, ac, score, dt, venue, spec, mid = m
     xy = coords_for(venue, hc)
+    if not xy and not venue and hn in NOVENUE: xy = NOVENUE[hn]
     if not xy:
         match_place.append(-1); continue
     key = (venue or hn, round(xy[0], 4), round(xy[1], 4))
@@ -200,6 +212,8 @@ MANUAL = json.load(open(MANUAL_PATH, encoding='utf-8'))['eintraege'] if os.path.
 def manual_for(p):
     for e in MANUAL:
         if e['spielort'] == p['name'] and (not e.get('verein') or e['verein'] in p['home']): return e
+        # leerer Spielort: gilt für Spiele des Vereins ohne Spielortangabe (Ortsname = Vereinsname)
+        if e['spielort'] == '' and e.get('verein') and p['name'] == e['verein']: return e
     return None
 manual_fixed = {}  # Ort-Index → Eintrag
 
