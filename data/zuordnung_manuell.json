@@ -37,6 +37,8 @@
     {"spielort": "Zliv", "verein": "SK Čtyři Dvory \"B\"", "europlan": 44974, "name": "Stadion SK Zliv", "href": "stadion-sk-zliv/stadion-44974.html", "lat": 49.07183, "lon": 14.36974, "notiz": "Stadion SK Zliv, bei Europlan keiner Liga zugeordnet – bestätigt 17.11.2026"},
     {"spielort": "Šamonice", "europlan": 86504, "name": "Hřiště Šamonice", "href": "h%25C5%2599i%25C5%25A1t%25C4%259B-%25C5%25A0amonice/stadion-86504.html", "lat": 49.35933, "lon": 14.03411, "notiz": "Hřiště Šamonice (Předotice), bei Europlan keiner Liga zugeordnet – bestätigt 17.11.2026"},
     {"spielort": "Slavče", "europlan": 86490, "name": "Hřiště Slavče", "href": "h%25C5%2599i%25C5%25A1t%25C4%259B-slav%25C4%258De/stadion-86490.html", "lat": 48.79523, "lon": 14.6136, "notiz": "Hřiště Slavče, bei Europlan keiner Liga zugeordnet – bestätigt 17.11.2026"},
-    {"spielort": "Božejovice", "europlan": 103133, "name": "Fotbalové hřiště Božejovice", "href": "fotbalov%C3%A9-h%C5%99i%C5%A1t%C4%9B-bo%C5%BEejovice/stadion-103133.html", "lat": 49.46573, "lon": 14.49349, "notiz": "Fotbalové hřiště Božejovice (Jistebnice); eigener Platz von Božejovice, für Sokol Chotoviny B Ausweichplatz – bestätigt 17.11.2026"}
+    {"spielort": "Božejovice", "europlan": 103133, "name": "Fotbalové hřiště Božejovice", "href": "fotbalov%C3%A9-h%C5%99i%C5%A1t%C4%9B-bo%C5%BEejovice/stadion-103133.html", "lat": 49.46573, "lon": 14.49349, "notiz": "Fotbalové hřiště Božejovice (Jistebnice); eigener Platz von Božejovice, für Sokol Chotoviny B Ausweichplatz – bestätigt 17.11.2026"},
+    {"spielort": "Borová", "verein": "FC Soběšice", "europlan": 73127, "notiz": "Hřiště FC Soběšice („Borová“ = Flurname in Soběšice) – bestätigt 17.11.2026"},
+    {"spielort": "Borová", "verein": "Soběšice B", "europlan": 73127, "notiz": "Hřiště FC Soběšice („Borová“ = Flurname in Soběšice) – bestätigt 17.11.2026"}
   ]
 }
