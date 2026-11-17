@@ -40,6 +40,7 @@
     {"spielort": "Božejovice", "europlan": 103133, "name": "Fotbalové hřiště Božejovice", "href": "fotbalov%C3%A9-h%C5%99i%C5%A1t%C4%9B-bo%C5%BEejovice/stadion-103133.html", "lat": 49.46573, "lon": 14.49349, "notiz": "Fotbalové hřiště Božejovice (Jistebnice); eigener Platz von Božejovice, für Sokol Chotoviny B Ausweichplatz – bestätigt 17.11.2026"},
     {"spielort": "Borová", "verein": "FC Soběšice", "europlan": 73127, "notiz": "Hřiště FC Soběšice („Borová“ = Flurname in Soběšice) – bestätigt 17.11.2026"},
     {"spielort": "Borová", "verein": "Soběšice B", "europlan": 73127, "notiz": "Hřiště FC Soběšice („Borová“ = Flurname in Soběšice) – bestätigt 17.11.2026"},
-    {"spielort": "Bezděkov", "verein": "SK Sokol Malé Žernoseky", "europlan": 33767, "notiz": "Hřiště SK Bezděkov; Ausweichplatz, beim eigentlichen Gast gespielt – bestätigt 17.11.2026"}
+    {"spielort": "Bezděkov", "verein": "SK Sokol Malé Žernoseky", "europlan": 33767, "notiz": "Hřiště SK Bezděkov; Ausweichplatz, beim eigentlichen Gast gespielt – bestätigt 17.11.2026"},
+    {"spielort": "Deštná", "europlan": 92489, "name": "Fotbalové hřiště v Deštné", "href": "futbalov%25C3%25A9-h%25C5%2599i%25C5%25A1t%25C4%259B-de%25C5%25A1tn%25C3%25A1/stadion-92489.html", "lat": 49.26559, "lon": 14.92074, "notiz": "Fotbalové hřiště v Deštné; eigener Platz von Deštná, für FK Dačice B beim Gast gespielt – bestätigt 17.11.2026"}
   ]
 }
