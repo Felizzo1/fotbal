@@ -33,6 +33,7 @@
     {"spielort": "PSA Český Dub", "europlan": 3337, "notiz": "Stadion Český Dub (Prüfung 17.11.2026)"},
     {"spielort": "Jevíčko", "europlan": 107937, "notiz": "Stadion Eská, TJ SK Jevíčko (Prüfung 17.11.2026)"},
     {"spielort": "Bečov u Mostu", "europlan": 32798, "notiz": "Hřiště Bečov (Prüfung 17.11.2026)"},
-    {"spielort": "umt Brandýs", "europlan": 44798, "notiz": "Na Spořilově hřiště 2, Kunstrasen Brandýs nad Labem (Prüfung 17.11.2026)"}
+    {"spielort": "umt Brandýs", "europlan": 44798, "notiz": "Na Spořilově hřiště 2, Kunstrasen Brandýs nad Labem (Prüfung 17.11.2026)"},
+    {"spielort": "Zliv", "verein": "SK Čtyři Dvory \"B\"", "europlan": 44974, "name": "Stadion SK Zliv", "href": "stadion-sk-zliv/stadion-44974.html", "lat": 49.07183, "lon": 14.36974, "notiz": "Stadion SK Zliv, bei Europlan keiner Liga zugeordnet – bestätigt 17.11.2026"}
   ]
 }
