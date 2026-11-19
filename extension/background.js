@@ -1,12 +1,12 @@
 // Fotbal CZ Spielfinder Updater
-// Öffnet dreimal pro Woche (Mo, Mi, Fr) fotbal.cz in einem Hintergrund-Tab, liest dort alle Spielpläne aus
+// Öffnet täglich fotbal.cz in einem Hintergrund-Tab, liest dort alle Spielpläne aus
 // (wie ein normaler Seitenbesuch, nur automatisch) und lädt die Rohdaten ins GitHub-Repo.
 importScripts('crawl.js');
 
 const START_URL = 'https://www.fotbal.cz/souteze/subjekty/';
-const WEEKDAYS = [1, 3, 5]; // Wochentage des Abrufs: 0 = Sonntag, 1 = Montag, 3 = Mittwoch, 5 = Freitag, 6 = Samstag
+const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6]; // Wochentage des Abrufs (0 = Sonntag … 6 = Samstag): täglich
 const HOUR = 6;          // Uhrzeit (lokal)
-const MAX_GAP = 3 * 24 * 60; // längster Abstand zwischen zwei Terminen in Minuten (Fr → Mo)
+const MAX_GAP = 1 * 24 * 60; // längster Abstand zwischen zwei Terminen in Minuten (täglich)
 const MAX_RUN = 6 * 3600e3; // ein Lauf darf (mit Captcha-Pause) bis zu 6 Stunden dauern
 
 function nextRun() {
