@@ -42,6 +42,8 @@
     {"spielort": "Borová", "verein": "Soběšice B", "europlan": 73127, "notiz": "Hřiště FC Soběšice („Borová“ = Flurname in Soběšice) – bestätigt 17.11.2026"},
     {"spielort": "Bezděkov", "verein": "SK Sokol Malé Žernoseky", "europlan": 33767, "notiz": "Hřiště SK Bezděkov; Ausweichplatz, beim eigentlichen Gast gespielt – bestätigt 17.11.2026"},
     {"spielort": "Deštná", "europlan": 92489, "name": "Fotbalové hřiště v Deštné", "href": "futbalov%25C3%25A9-h%25C5%2599i%25C5%25A1t%25C4%259B-de%25C5%25A1tn%25C3%25A1/stadion-92489.html", "lat": 49.26559, "lon": 14.92074, "notiz": "Fotbalové hřiště v Deštné; eigener Platz von Deštná, für FK Dačice B beim Gast gespielt – bestätigt 17.11.2026"},
-    {"spielort": "tráva", "verein": "Sokol Dlouhá Loučka", "europlan": 106599, "notiz": "Hřiště Dlouhá Loučka bei Uničov (Olomoucer Verein „Sokol Dlouhá Loučka“); Pokalspiele ab März 2027 nur als „tráva“. Achtung: fotbal.cz verlinkt fälschlich den gleichnamigen Verein u Svitav („Dlouhá Loučka“, 107931) – 17.11.2026"}
+    {"spielort": "tráva", "verein": "Sokol Dlouhá Loučka", "europlan": 106599, "notiz": "Hřiště Dlouhá Loučka bei Uničov (Olomoucer Verein „Sokol Dlouhá Loučka“); Pokalspiele ab März 2027 nur als „tráva“. Achtung: fotbal.cz verlinkt fälschlich den gleichnamigen Verein u Svitav („Dlouhá Loučka“, 107931) – 17.11.2026"},
+    {"spielort": "UMT Děčín", "europlan": 6534, "notiz": "Městský stadion Děčín – laut User der einzige Kunstrasenplatz in Děčín – 20.11.2026"},
+    {"spielort": "Děčín- UMT", "europlan": 6534, "notiz": "Městský stadion Děčín – laut User der einzige Kunstrasenplatz in Děčín – 20.11.2026"}
   ]
 }
