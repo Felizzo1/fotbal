@@ -194,6 +194,15 @@ section.list{overflow:auto;border-left:1px solid var(--line);background:var(--pa
     </fieldset>
 
     <fieldset>
+      <legend>Platz</legend>
+      <div class="chips" id="surf">
+        <button class="chip" type="button" data-s="g" aria-pressed="true">Rasen</button>
+        <button class="chip" type="button" data-s="a" aria-pressed="true">Kunstrasen</button>
+        <button class="chip" type="button" data-s="u" aria-pressed="true" title="Weder fotbal.cz noch Europlan nennen den Belag">unbekannt</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
       <legend>Ligaebene Männer</legend>
       <div class="chips" id="levels"></div>
     </fieldset>
@@ -264,9 +273,9 @@ const gen=new Date(D.generated);
 $('#meta').textContent='Saison '+D.season+' · '+D.matches.length.toLocaleString('de-DE')+' Spiele · Stand '+gen.toLocaleDateString('de-DE')+' '+gen.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
 
 // ---------- Zustand ----------
-const S={from:'',to:'',cats:new Set([0,1]),cups:true,leagues:true,levels:new Set([1,2,3,4,5,6,7,8,9,10,0]),kraj:-1,okres:-1,center:null,radius:25,q:'',results:false,limit:200,timesOff:new Set()};
-try{ const s=JSON.parse(localStorage.getItem('fcz-filter')||'null'); if(s){ S.cats=new Set(s.cats); S.cups=s.cups; S.leagues=s.leagues!==false; S.levels=new Set(s.levels); S.radius=s.radius||25; S.kraj=s.kraj??-1; S.okres=s.okres??-1; S.center=s.center||null; S.results=!!s.results; } }catch(e){}
-const save=()=>{ try{ localStorage.setItem('fcz-filter',JSON.stringify({cats:[...S.cats],cups:S.cups,leagues:S.leagues,levels:[...S.levels],radius:S.radius,kraj:S.kraj,okres:S.okres,center:S.center,results:S.results})); }catch(e){} };
+const S={from:'',to:'',cats:new Set([0,1]),cups:true,leagues:true,surf:new Set(['g','a','u']),levels:new Set([1,2,3,4,5,6,7,8,9,10,0]),kraj:-1,okres:-1,center:null,radius:25,q:'',results:false,limit:200,timesOff:new Set()};
+try{ const s=JSON.parse(localStorage.getItem('fcz-filter')||'null'); if(s){ S.cats=new Set(s.cats); S.cups=s.cups; S.leagues=s.leagues!==false; if(Array.isArray(s.surf)) S.surf=new Set(s.surf); S.levels=new Set(s.levels); S.radius=s.radius||25; S.kraj=s.kraj??-1; S.okres=s.okres??-1; S.center=s.center||null; S.results=!!s.results; } }catch(e){}
+const save=()=>{ try{ localStorage.setItem('fcz-filter',JSON.stringify({cats:[...S.cats],cups:S.cups,leagues:S.leagues,surf:[...S.surf],levels:[...S.levels],radius:S.radius,kraj:S.kraj,okres:S.okres,center:S.center,results:S.results})); }catch(e){} };
 
 // ---------- Zeitraum ----------
 function setQuick(q){
@@ -313,7 +322,10 @@ $('#okres').onchange=e=>{S.okres=+e.target.value; render(true);};
 // ---------- Orte ----------
 const P=D.places;
 // Kürzel „UMT“/„UT“ (umělá tráva) als Kunstrasen ausschreiben
-P.forEach(p=>{ p.raw=p[0]; /* Original für die Google-Suche */ p[0]=p[0].replace(/(^|[\s\/,(-])(?:UMT|UT|ÚT)\b\.?/g,'$1Kunstrasen'); });
+P.forEach(p=>{ p.raw=p[0]; /* Original für die Google-Suche und den Belag */ p[0]=p[0].replace(/(^|[\s\/,(-])(?:UMT|UT|ÚT)\b\.?/g,'$1Kunstrasen'); });
+// Belag aus dem Spielort-Text von fotbal.cz (+ Europlan-Name): 1 = Rasen, 2 = Kunstrasen, 3 = beides möglich, 0 = unbekannt
+const PSURF=P.map(p=>p[8]||0); // Belag aus preprocess.py: 1 Rasen, 2 Kunstrasen, 0 unbekannt
+document.querySelectorAll('#surf .chip').forEach(b=>{ b.setAttribute('aria-pressed',S.surf.has(b.dataset.s)); b.onclick=()=>{ const k=b.dataset.s; S.surf.has(k)?S.surf.delete(k):S.surf.add(k); b.setAttribute('aria-pressed',S.surf.has(k)); render(); }; });
 // Suche ohne Rücksicht auf Háčky/Čárky und Groß-/Kleinschreibung: „Decin“ findet „Děčín“
 const fold=s=>String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const placeNames=new Map();
@@ -366,6 +378,7 @@ function filtered(){
     const c=C[m[0]]; if(!S.cats.has(c[1])) continue;
     if(c[3]&&!S.cups) continue;
     if(!c[3]&&!S.leagues) continue;
+    if(S.surf.size<3){ const b=m[5]>=0?PSURF[m[5]]:0; if(!((b&1&&S.surf.has('g'))||(b&2&&S.surf.has('a'))||(!b&&S.surf.has('u')))) continue; }
     if(c[1]===0&&!c[3]&&!S.levels.has(c[2]||0)) continue;
     if(!S.results&&m[4]&&/\d/.test(m[4])&&dt<nowStr) continue;
     const p=m[5]>=0?P[m[5]]:null;

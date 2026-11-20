@@ -500,6 +500,7 @@ if os.path.exists(EP_PATH):
 # Nennt der Spielort-Text einen Ort, wird dieser gesucht (bis 25 km vom Verein) und der nächste Platz dort genommen,
 # sonst der nächste Platz am Vereinssitz (bis 2 km). Findet sich kein Platz, wenigstens die Ortsmitte.
 OSM_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'osm.json')
+osm_art = [False] * len(place_list)  # sicher zugeordneter OSM-Platz ist als Kunstrasen getaggt
 osm_flag = [0] * len(place_list)  # 1 = OSM-Platz am genannten Ort, 2 = nur OSM-Ortsmitte, 3 = OSM-Platz geschätzt (mehrere möglich oder nur Vereinssitz)
 if os.path.exists(OSM_PATH):
     O = json.load(open(OSM_PATH, encoding='utf-8'))
@@ -580,6 +581,7 @@ if os.path.exists(OSM_PATH):
             q = cs[0][1]
             # sicher nur, wenn am genannten Ort höchstens zwei Plätze infrage kommen (in Städten wie Děčín gibt es viele)
             p['lat'], p['lon'] = q[0], q[1]; ep_name[i] = q[2]; osm_flag[i] = 1 if town and n_cands <= 2 else 3
+            if osm_flag[i] == 1 and q[3]: osm_art[i] = True
             o_stats['Platz über Ortsname' if town else 'Platz am Vereinssitz'] += 1
         elif town:
             p['lat'], p['lon'] = town; osm_flag[i] = 2; o_stats['nur Ortsmitte'] += 1
@@ -628,12 +630,29 @@ for m, pi in zip(matches, match_place):
     M.append([ci, dt, ti(hn), ti(an), score, pi, rnd or 0, spec if spec is not None else -1, (mid or '').replace('-', '')])
 M.sort(key=lambda r: r[1])
 
+# Belag je Spielort als Bitmaske (1 = Rasen, 2 = Kunstrasen, 0 = unbekannt):
+# zuerst der Spielort-Text von fotbal.cz („UMT“, „tráva“), sonst der Untergrund des Europlan-Stadions, sonst OSM
+S_ART = re.compile(r'(?<![^\W\d_])(umt|ut|út|úmt|umt3g|ut3g|3g|uměl[aá]|umela|umělka|umelka|kunstrasen)(?![^\W\d_])', re.I)
+S_GRASS = re.compile(r'(?<![^\W\d_])(tr[aá]va|travnat\w*)(?![^\W\d_])|(?<![^\W\d_])t\.(?=\s|$|,|/)', re.I)
+EP_SURF = {s['href']: s.get('untergrund', '') for s in globals().get('EP', [])}
+def surface(i):
+    t = place_list[i]['name'] + ' ' + (ep_name[i] if not ep_href[i] else '')
+    a = bool(S_ART.search(t)); g = bool(S_GRASS.search(re.sub(r'um[eě]l[aá] tr[aá]va', '', t, flags=re.I)))
+    if a or g: return (1 if g else 0) | (2 if a else 0)
+    if ep_href[i]:
+        u = EP_SURF.get(ep_href[i], '').lower()
+        if 'kunst' in u: return 2
+        if 'rasen' in u: return 1
+        if S_ART.search(ep_name[i]): return 2  # Europlan-Name wie „UMT Klatovy“
+        return 0
+    return 2 if osm_art[i] else 0
 P = []
 for i, p in enumerate(place_list):
     P.append([p['name'], round(p['lat'], 5), round(p['lon'], 5),
               OKRESY.index(okres_names[p['ok']]) if p['ok'] in okres_names else -1,
               KRAJE.index(kraj_names[p['kr']]) if p['kr'] in kraj_names else -1,
-              ep_href[i], ep_name[i], osm_flag[i]])
+              ep_href[i], ep_name[i], osm_flag[i], surface(i)])
+print('Belag (Orte):', dict(Counter(r[8] for r in P)))
 
 out = {
     'generated': R['generated'], 'season': R.get('season', ''),
